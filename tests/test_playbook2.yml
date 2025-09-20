@@ -1,0 +1,11 @@
+- name: Test 
+  hosts: all
+  tasks:
+    - name: Install nginx package
+      command: sudo dnf install nginx 
+
+    - name: Restart nginx service
+      command: systemctl restart nginx
+      ignore_errors: true
+
+    - command: systemctl restart mysql

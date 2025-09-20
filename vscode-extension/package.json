@@ -1,0 +1,72 @@
+{
+  "name": "sast-yaml",
+  "displayName": "SAST-YAML-analyzer",
+  "description": "Статический анализ безопасности плейбуков",
+  "version": "1.0.0",
+  "publisher": "Semenova Olga",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Linters",
+    "Security"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml",
+    "onCommand:sast-yaml.runAnalysis"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sast-yaml.runAnalysis",
+        "title": "Запустить анализ",
+        "category": "SAST-YAML"
+      },
+      {
+        "command": "sast-yaml.showReport",
+        "title": "Показать отчет",
+        "category": "SAST-YAML"
+      }
+    ],
+    "configuration": {
+      "title": "SAST-YAML",
+      "properties": {
+        "yamlsast.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Включить/отключить анализ безопасности плейбуков"
+        },
+        "yamlsast.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Запускать анализ автоматически при сохранении файла"
+        },
+        "yamlsast.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Путь к интерпретатору Python (например, pyrhon3, /usr/bin/python3)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.126",
+    "@types/vscode": "^1.104.0",
+    "typescript": "^4.9.5"
+  },
+  "keywords": [
+    "yaml",
+    "playbook",
+    "security",
+    "linter"
+  ],
+  "author": "Semenova Olga",
+  "license": "ISC"
+}
