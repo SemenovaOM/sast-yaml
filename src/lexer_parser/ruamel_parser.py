@@ -5,24 +5,21 @@ from ruamel.yaml.composer import ComposerError
 from ruamel.yaml.parser import ParserError
 from ruamel.yaml.scanner import ScannerError
 
+# Парсер YAML-файлов на основе ruamel.yaml
+
 class RuamelYAMLParser:
-    """
-    Парсер YAML-файлов на основе ruamel.yaml
-    """
-    
     def __init__(self):
         self.yaml = YAML()
         self.yaml.preserve_quotes = True
         self.yaml.allow_duplicate_keys = False
     
     def parse(self, yaml_text: str):
-        """
-        Парсит YAML-текст и возвращает структуру данных Python
+
+        # Парсит YAML-текст и возвращает структуру данных Python
+        # :param yaml_text: Строка с YAML-содержимым
+        # :return: Распарсенная структура данных
+        # :raises: Exception при ошибках парсинга
         
-        :param yaml_text: Строка с YAML-содержимым
-        :return: Распарсенная структура данных
-        :raises: Exception при ошибках парсинга
-        """
         try:
             return self.yaml.load(yaml_text)
         except (ComposerError, ParserError, ScannerError) as e:
@@ -33,12 +30,11 @@ class RuamelYAMLParser:
             raise
     
     def parse_file(self, file_path: str):
-        """
-        Парсит YAML-файл и возвращает структуру данных Python
         
-        :param file_path: Путь к YAML-файлу
-        :return: Распарсенная структура данных
-        """
+        # Парсит YAML-файл и возвращает структуру данных Python
+        # :param file_path: Путь к YAML-файлу
+        # :return: Распарсенная структура данных
+        
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return self.yaml.load(f)
@@ -53,12 +49,11 @@ class RuamelYAMLParser:
             raise
 
 def print_structure(data, indent=0):
-    """
-    Рекурсивно печатает структуру YAML-документа
     
-    :param data: Данные для печати
-    :param indent: Текущий уровень отступа
-    """
+    # Рекурсивно печатает структуру YAML-документа
+    # :param data: Данные для печати
+    # :param indent: Текущий уровень отступа
+    
     if isinstance(data, dict):
         for key, value in data.items():
             print('  ' * indent + f"{key}:")
@@ -75,7 +70,7 @@ if __name__ == "__main__":
     
     # Тестирование парсинга из файла
     try:
-        result = parser.parse_file('/root/sast/test_playbook.yml')
+        result = parser.parse_file('/root/sast-yaml/tests/test_playbook4.yml')
         print("Парсинг из файла прошел успешно.")
         print("\nСтруктура данных:")
         print_structure(result)

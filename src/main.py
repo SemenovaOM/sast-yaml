@@ -11,12 +11,12 @@ from src.reports import ReportGenerator
 
 def main():
     parser = argparse.ArgumentParser(description='SAST-анализ плейбуков')
-    parser.add_argument('playbook_path', help='Путь к плейбуку')
+    parser.add_argument('playbook_path', help='Путь к YAML-файлу плейбука для анализа')
     parser.add_argument('--format', '-f', choices=['text', 'json'],
-                        default='text', help='Формат отчета')
+                        default='text', help='Формат отчета (по умолчанию text)')
     parser.add_argument('--output', '-o', nargs='?', const=True, default=None,
                         help='Сохранить отчет в файл')
-    parser.add_argument('--no-ast', action='store_true', help='Не выводить AST дерево')
+    parser.add_argument('--no-ast', action='store_true', help='Не выводить структуру AST-дерева')
 
     args = parser.parse_args()
 
