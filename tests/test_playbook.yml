@@ -1,23 +1,7 @@
-- hosts: all
-  gather_facts: no
+- name: Deploy Postfix
+  hosts: servers
   tasks:
-    - name: Get domain name
-      command: hostname -d
-      register: domain
-
-    - name: Configure krb5_renew_interval in domain section
-      lineinfile:
-        path: "/etc/sssd/sssd.conf"
-        regexp: '^\s*krb5_renew_interval\s*='
-        line: 'krb5_renew_interval = {{ seconds }}s'
-        insertafter: '^\[domain/{{ domain.stdout | trim }}\]'
+    - name: Install Postfix
+      apt:
+        name: postfix
         state: present
-    
-    - name: Restart Sssd service
-      systemd:
-        name: sssd
-        state: restarted
-
-  vars:
-    seconds: 20
-
