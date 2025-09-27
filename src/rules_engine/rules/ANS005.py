@@ -1,14 +1,14 @@
 from typing import List, Dict, Any
 from src.rules_engine.rule import Rule
 
-# Правило: Отсутствие имени у задачи
+# Правило: Использование устаревшего модуля raw
 
-class ANS003(Rule):
+class ANS005(Rule):
     def __init__(self):
         super().__init__(
-            id="ANS003",
-            description="Задача не имеет имени",
-            severity="LOW"
+            id="ANS005",
+            description="Использование устаревшего модуля raw",
+            severity="MEDIUM"
         )
     
     def check(self, ast: List[Any]) -> List[Dict[str, Any]]:
@@ -22,11 +22,10 @@ class ANS003(Rule):
             for task in play.tasks:
                 if not isinstance(task, TaskNode):
                     continue
-                
-                if not task.name or task.name.strip() == "":
-                    play_phrase = ""
-                    if play.name and play.name.strip():
-                        play_phrase = f" в плейбуке '{play.name.strip()}'"
+
+                if task.module in ['raw', 'ansible.builtin.raw']:
+                    task_phrase = f"'{task.name.strip()}'" if task.name and task.name.strip() else ""
+                    play_phrase = f" в плейбуке '{play.name.strip()}'" if play.name and play.name.strip() else ""
                     
                     violations.append({
                         'rule_id': self.id,
@@ -34,7 +33,9 @@ class ANS003(Rule):
                         'severity': self.severity,
                         'play': play.name or None,
                         'task': task.name or None,
-                        'message': f"Задача{play_phrase} не имеет имени. "
-                                   f"Рекомендуется добавить 'name' для лучшей читаемости и отладки."
+                        'message': (
+                            f"Задача {task_phrase}{play_phrase} использует устаревший модуль raw. "
+                            f"Рекомендуется использовать модули command/shell."
+                        )
                     })
         return violations
