@@ -1,0 +1,8 @@
+- name: Installing PostgreSQL
+  hosts: db_servers
+  tasks:
+    - name: Install PostgreSQL
+      raw: dnf install -y postgresql-server
+      
+    - name: Initialize PostgreSQL database
+      shell: sudo postgresql-setup initdb
