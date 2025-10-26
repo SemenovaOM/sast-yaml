@@ -82,3 +82,23 @@ class ANS006(Rule):
                 return True
         
         return False
+
+    def _missing_permissions(self, task) -> bool:
+        if not hasattr(task, 'parameters'):
+            return False
+    
+        params = task.parameters
+        if not isinstance(params, dict):
+            return False
+    
+        if params.get('state') == 'absent':
+            return False
+        
+        owner = params.get('owner')
+        group = params.get('group')
+        mode = params.get('mode')
+    
+        if owner is None and group is None and mode is None:
+            return True
+        
+        return False
