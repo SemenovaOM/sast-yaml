@@ -1,0 +1,35 @@
+- name: Configure SSH server with insecure settings
+  hosts: all
+  become: yes
+  tasks:
+    - name: Enable root login 
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin yes'  
+
+    - name: Enable password authentication 
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'  
+
+    - name: Configure old SSH protocol 
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: 'Protocol 1'  
+
+    - name: Allow empty passwords 
+      blockinfile:
+        path: /etc/ssh/sshd_config
+        block: |
+          PermitEmptyPasswords yes
+          X11Forwarding yes  
+
+    - name: Copy insecure SSH config 
+      copy:
+        content: |
+          Protocol 1
+          PermitRootLogin yes
+          PasswordAuthentication yes
+        dest: /etc/ssh/sshd_config

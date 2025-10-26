@@ -1,0 +1,13 @@
+- name: Setup servers
+  hosts: servers
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+
+    - name: Install Python packages
+      pip:
+        name:
+          - django
+          - requests

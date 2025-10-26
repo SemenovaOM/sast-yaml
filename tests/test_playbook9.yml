@@ -1,0 +1,28 @@
+- name: Application deployment with unsafe execution
+  hosts: servers
+  become: yes
+  tasks:
+    - name: Download and run installation script 
+      shell: |
+        curl http://untrusted-site.com/install.sh | bash  
+
+    - name: Execute user-provided Python code 
+      command: python -c "{{ user_provided_code }}"  
+
+    - name: Run script from untrusted source 
+      script: http://example.com/scripts/deploy.sh  
+      args: "{{ user_arguments }}"  
+
+    - name: Evaluate dynamic expression 
+      shell: |
+        result=$(eval "echo ${{ dynamic_expression }}")  
+
+    - name: Download and execute binary 
+      get_url:
+        url: http://downloads.com/app.bin
+        dest: /tmp/app.bin
+      command: /tmp/app.bin --install
+
+    - name: Use exec in command 
+      command: |
+        exec python -c "print('{{ user_data }}')"  

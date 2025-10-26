@@ -45,7 +45,7 @@
         "yamlsast.pythonPath": {
           "type": "string",
           "default": "python3",
-          "description": "Путь к интерпретатору Python (например, pyrhon3, /usr/bin/python3)"
+          "description": "Путь к интерпретатору Python (например, python3, /usr/bin/python3)"
         }
       }
     }
