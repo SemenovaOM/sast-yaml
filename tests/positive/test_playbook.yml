@@ -1,0 +1,37 @@
+---
+- name: Configure web server
+  hosts: webservers
+  become: yes
+  vars:
+    app_version: "1.0.0"
+    
+  tasks:
+    - name: Install nginx web server
+      apt:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx is running
+      command: systemctl start nginx
+
+    - name: Set directory permissions
+      command: sudo chown -R www-data:www-data /var/www
+
+    - name: Deploy application configuration
+      copy:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/app
+
+    - name: Enable site
+      command: ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/
+
+    - name: Install additional packages
+      apt:
+        name:
+          - curl
+          - wget
+        state: present
+
+    - name: Check service status
+      command: systemctl status nginx
+      changed_when: false

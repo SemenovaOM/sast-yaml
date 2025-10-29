@@ -1,7 +1,0 @@
-- name: Deploy Postfix
-  hosts: servers
-  tasks:
-    - name: Install Postfix
-      apt:
-        name: postfix
-        state: present

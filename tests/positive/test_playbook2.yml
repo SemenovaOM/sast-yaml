@@ -1,0 +1,203 @@
+---
+- name: Deploy Python application to production
+  hosts: app_servers
+  become: yes
+  vars:
+    deployment_env: "production"
+    db_url: "postgresql://user:pass@db/app"
+    
+  tasks:
+    - name: Install system dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - git
+          - build-essential
+          - libpq-dev
+          - nginx
+          - supervisor
+        state: present
+
+    - name: Create application user
+      user:
+        name: appuser
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+
+    - name: Create application directory structure
+      file:
+        path: /opt/app
+        state: directory
+        owner: appuser
+        group: appuser
+
+    - name: Create logs directory
+      file:
+        path: /opt/app/logs
+        state: directory
+        owner: appuser
+        group: appuser
+
+    - name: Create static directory
+      file:
+        path: /opt/app/static
+        state: directory
+        owner: appuser
+        group: appuser
+
+    - name: Create media directory
+      file:
+        path: /opt/app/media
+        state: directory
+        owner: appuser
+        group: appuser
+
+    - name: Clone application repository
+      git:
+        repo: https://github.com/company/production-app.git
+        dest: /opt/app/src
+        version: "v1.2.3"
+
+    - name: Setup Python virtual environment
+      pip:
+        virtualenv: /opt/app/venv
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install Python requirements
+      pip:
+        requirements: /opt/app/src/requirements.txt
+        virtualenv: /opt/app/venv
+
+    - name: Install gunicorn
+      pip:
+        name: gunicorn
+        virtualenv: /opt/app/venv
+
+    - name: Install database driver
+      pip:
+        name: psycopg2-binary
+        virtualenv: /opt/app/venv
+
+    - name: Install redis client
+      pip:
+        name: redis
+        virtualenv: /opt/app/venv
+
+    - name: Install celery
+      pip:
+        name: celery
+        virtualenv: /opt/app/venv
+
+    - name: Setup application configuration
+      template:
+        src: templates/config.py.j2
+        dest: /opt/app/config.py
+
+    - name: Create environment file
+      copy:
+        content: "DATABASE_URL={{ db_url }}\nREDIS_URL=redis://localhost:6379\nSECRET_KEY=insecure-secret-key-123\nDEBUG=False"
+        dest: /opt/app/.env
+
+    - name: Download external assets
+      get_url:
+        url: "http://cdn.company.com/assets.tar.gz"
+        dest: /tmp/assets.tar.gz
+        validate_certs: no
+
+    - name: Extract assets
+      unarchive:
+        src: /tmp/assets.tar.gz
+        dest: /opt/app/static
+        remote_src: yes
+
+    - name: Run database migrations
+      command: /opt/app/venv/bin/python manage.py migrate
+      environment:
+        DATABASE_URL: "{{ db_url }}"
+      become_user: appuser
+      changed_when: false
+
+    - name: Collect static files
+      command: /opt/app/venv/bin/python manage.py collectstatic --noinput
+      become_user: appuser
+
+    - name: Setup gunicorn service
+      template:
+        src: templates/gunicorn.service.j2
+        dest: /etc/systemd/system/gunicorn.service
+
+    - name: Setup celery service
+      template:
+        src: templates/celery.service.j2
+        dest: /etc/systemd/system/celery.service
+
+    - name: Setup nginx configuration
+      template:
+        src: templates/nginx-app.conf.j2
+        dest: /etc/nginx/sites-available/app
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/app
+        dest: /etc/nginx/sites-enabled/app
+        state: link
+
+    - name: Start gunicorn service
+      systemd:
+        name: gunicorn
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start celery service
+      systemd:
+        name: celery
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Restart nginx service
+      systemd:
+        name: nginx
+        state: restarted
+        daemon_reload: yes
+
+    - name: Setup log rotation
+      copy:
+        src: files/logrotate-app
+        dest: /etc/logrotate.d/app
+
+    - name: Configure firewall for web
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Configure firewall for SSL
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Create backup script
+      copy:
+        content: "#!/bin/bash\npg_dump $DATABASE_URL > /backups/db_$(date +%Y%m%d).sql\ntar -czf /backups/app_$(date +%Y%m%d).tar.gz /opt/app"
+        dest: /usr/local/bin/backup-app.sh
+        mode: 0755
+
+    - name: Schedule daily backups
+      cron:
+        name: "Application backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup-app.sh"
+
+    - name: Verify application status
+      uri:
+        url: "http://localhost:8000/health"
+        method: GET
+        status_code: 200

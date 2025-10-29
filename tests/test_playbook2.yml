@@ -1,9 +1,0 @@
-- name: Installing Nginx
-  hosts: all
-  tasks:
-    - name: Install nginx package
-      command: sudo dnf install nginx 
-
-    - name: Start nginx service
-      command: systemctl start nginx
-      ignore_errors: true

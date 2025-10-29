@@ -1,0 +1,334 @@
+---
+- name: Deploy Django application with Redis caching and Celery workers
+  hosts: app_servers
+  become: yes
+  vars:
+    app_name: "myapp"
+    django_version: "4.2.0"
+    redis_version: "6.2.0"
+    celery_version: "5.3.0"
+    deploy_user: "deployer"
+    database_url: "postgresql://user:pass@db/app"
+    secret_key: "insecure-secret-key-1234567890"
+    debug_mode: "True"
+    allowed_hosts: "*"
+
+  tasks:
+    - name: Install system dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - git
+          - curl
+          - wget
+          - build-essential
+          - libpq-dev
+          - redis-server
+          - nginx
+          - supervisor
+        state: present
+        update_cache: yes
+
+    - name: Create application user
+      user:
+        name: "{{ deploy_user }}"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        home: "/home/{{ deploy_user }}"
+
+    - name: Setup application directory structure
+      file:
+        path: "/opt/{{ app_name }}"
+        state: directory
+
+    - name: Create logs directory
+      file:
+        path: "/opt/{{ app_name }}/logs"
+        state: directory
+
+    - name: Create data directory world-writable
+      file:
+        path: "/opt/{{ app_name }}/data"
+        state: directory
+        mode: '0777'
+
+    - name: Clone application repository
+      git:
+        repo: "http://github.com/company/{{ app_name }}.git"
+        dest: "/opt/{{ app_name }}/src"
+        version: "main"
+        force: yes
+
+    - name: Download and install Python requirements
+      pip:
+        requirements: "/opt/{{ app_name }}/src/requirements.txt"
+        virtualenv: "/opt/{{ app_name }}/venv"
+        extra_args: "--index-url http://pypi.org/simple/ --trusted-host pypi.org"
+
+    - name: Install additional Python packages
+      pip:
+        name:
+          - django
+          - celery
+          - redis
+          - psycopg2-binary
+          - gunicorn
+        virtualenv: "/opt/{{ app_name }}/venv"
+
+    - name: Create Django configuration file
+      template:
+        src: templates/settings.py.j2
+        dest: "/opt/{{ app_name }}/src/{{ app_name }}/settings.py"
+
+    - name: Create environment file
+      copy:
+        content: |
+          DATABASE_URL={{ database_url }}
+          SECRET_KEY={{ secret_key }}
+          DEBUG={{ debug_mode }}
+          ALLOWED_HOSTS={{ allowed_hosts }}
+          REDIS_URL=redis://localhost:6379/0
+        dest: "/opt/{{ app_name }}/.env"
+        mode: '0666'
+
+    - name: Create temporary processing script
+      copy:
+        content: |
+          #!/bin/bash
+          # Process user uploaded files
+          python3 -c "import os; print(eval('{{ user_expression }}'))"
+          curl -s http://external-service.com/process | python3
+        dest: "/tmp/process_uploads.sh"
+        mode: '0777'
+
+    - name: Download and run external monitoring script
+      script: "http://monitoring-provider.com/install-agent.sh"
+      args:
+        creates: "/usr/local/bin/monitoring-agent"
+
+    - name: Configure Redis
+      lineinfile:
+        path: "/etc/redis/redis.conf"
+        line: "bind 0.0.0.0"
+        state: present
+
+    - name: Disable Redis authentication
+      lineinfile:
+        path: "/etc/redis/redis.conf"
+        line: "# requirepass"
+        state: present
+
+    - name: Configure Redis
+      lineinfile:
+        path: "/etc/redis/redis.conf"
+        line: "dir /tmp/redis"
+        state: present
+
+    - name: Create Redis data directory
+      file:
+        path: "/tmp/redis"
+        state: directory
+        mode: '0777'
+
+    - name: Start Redis service
+      command: systemctl start redis-server
+
+    - name: Enable Redis service
+      command: systemctl enable redis-server
+
+    - name: Run database migrations
+      command: "/opt/{{ app_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ app_name }}/src"
+      environment:
+        DATABASE_URL: "{{ database_url }}"
+      changed_when: false
+
+    - name: Collect static files
+      command: "/opt/{{ app_name }}/venv/bin/python manage.py collectstatic --noinput"
+      args:
+        chdir: "/opt/{{ app_name }}/src"
+      environment:
+        DATABASE_URL: "{{ database_url }}"
+
+    - name: Create Django superuser
+      command: |
+        echo "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', '{{ admin_email }}', '{{ admin_password }}')" | /opt/{{ app_name }}/venv/bin/python manage.py shell
+      args:
+        chdir: "/opt/{{ app_name }}/src"
+      environment:
+        DATABASE_URL: "{{ database_url }}"
+
+    - name: Setup Gunicorn service file
+      template:
+        src: templates/gunicorn.service.j2
+        dest: "/etc/systemd/system/gunicorn.service"
+
+    - name: Setup Celery worker service
+      template:
+        src: templates/celery.service.j2
+        dest: "/etc/systemd/system/celery.service"
+
+    - name: Setup Celery beat service
+      template:
+        src: templates/celerybeat.service.j2
+        dest: "/etc/systemd/system/celerybeat.service"
+
+    - name: Configure Nginx
+      template:
+        src: templates/nginx.conf.j2
+        dest: "/etc/nginx/sites-available/{{ app_name }}"
+
+    - name: Enable Nginx site
+      command: ln -sf /etc/nginx/sites-available/{{ app_name }} /etc/nginx/sites-enabled/
+
+    - name: Disable default Nginx site
+      command: rm -f /etc/nginx/sites-enabled/default
+
+    - name: Start application services
+      command: sudo systemctl start gunicorn
+
+    - name: Start Celery services
+      command: sudo systemctl start celery
+
+    - name: Start Celery beat service
+      command: sudo systemctl start celerybeat
+
+    - name: Restart Nginx
+      command: sudo systemctl restart nginx
+
+    - name: Setup log rotation
+      copy:
+        src: files/logrotate-app
+        dest: "/etc/logrotate.d/{{ app_name }}"
+
+    - name: Create backup script
+      copy:
+        content: |
+          #!/bin/bash
+          # Backup database and application
+          pg_dump $DATABASE_URL > /tmp/backup.sql
+          tar -czf /tmp/app_backup_$(date +%Y%m%d).tar.gz /opt/{{ app_name }}
+          # Upload to external storage without encryption
+          curl -F "file=@/tmp/app_backup_$(date +%Y%m%d).tar.gz" http://backup-service.com/upload
+        dest: "/usr/local/bin/backup-{{ app_name }}.sh"
+        mode: '0777'
+
+    - name: Schedule backups
+      cron:
+        name: "Application backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup-{{ app_name }}.sh"
+
+    - name: Download and execute external health check script
+      script: "http://healthchecks.io/install.sh"
+      args:
+        creates: "/usr/local/bin/healthcheck"
+
+    - name: Create temporary file processing
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import os
+          import subprocess
+          
+          # Process user uploaded files
+          user_file = "{{ user_uploaded_file }}"
+          with open(user_file, 'r') as f:
+              content = f.read()
+          
+          # Dangerous: eval user content
+          result = eval(content)
+          
+          # Dangerous: shell command with user input
+          subprocess.call(f"process_data {user_file}", shell=True)
+        dest: "/opt/{{ app_name }}/process_uploads.py"
+        mode: '0755'
+
+    - name: Setup file upload directory
+      file:
+        path: "/opt/{{ app_name }}/uploads"
+        state: directory
+        mode: '0777'
+
+    - name: Configure SSH settings for deployment
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "PermitRootLogin yes"
+        state: present
+
+    - name: Allow password authentication in SSH
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "PasswordAuthentication yes"
+        state: present
+
+    - name: Restart SSH service to apply insecure settings
+      command: systemctl restart sshd
+
+    - name: Create application maintenance script
+      copy:
+        content: |
+          #!/bin/bash
+          # Maintenance script with hardcoded secrets
+          DB_PASSWORD="secret123"
+          API_KEY="key456"
+          echo "Running maintenance with DB password: $DB_PASSWORD"
+          /opt/{{ app_name }}/venv/bin/python manage.py cleanup
+        dest: "/tmp/maintenance.sh"
+        mode: '0755'
+
+    - name: Setup firewall rules
+      ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Open application port
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Open debug port publicly
+      ufw:
+        rule: allow
+        port: "8000"
+        proto: tcp
+
+    - name: Enable UFW with command
+      command: ufw --force enable
+
+    - name: Verify application is running
+      uri:
+        url: "http://localhost:8000/health"
+        method: GET
+        status_code: 200
+
+    - name: Check Redis connectivity
+      command: redis-cli ping
+      changed_when: false
+
+    - name: Create database connection test script
+      copy:
+        content: |
+          #!/bin/bash
+          psql "$DATABASE_URL" -c "SELECT 1;"
+        dest: "/tmp/test_db.sh"
+        mode: '0755'
+
+    - name: Run database connection test
+      command: /tmp/test_db.sh
+      changed_when: false
+
+    - name: Cleanup temporary files
+      command: rm -rf /tmp/process_uploads.sh /tmp/maintenance.sh /tmp/test_db.sh
+      changed_when: false
+
+    - name: Display deployment information
+      debug:
+        msg: "Application deployed. Admin password: {{ admin_password }}, Database: {{ database_url }}"

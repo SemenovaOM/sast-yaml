@@ -1,0 +1,529 @@
+---
+- name: Deploy enterprise content management platform
+  hosts: content_servers
+  become: yes
+  vars:
+    platform_name: "contenthub"
+    platform_version: "3.2.1"
+    database_cluster: "db-cluster.internal"
+    search_cluster: "search-cluster.internal"
+    cache_servers: "redis1.internal,redis2.internal"
+    cdn_domain: "cdn.company.com"
+    backup_retention_days: 30
+    max_file_size: "500M"
+    session_duration: 86400
+
+  tasks:
+    - name: Update system package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install operating system dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - python3-dev
+          - git
+          - curl
+          - wget
+          - build-essential
+          - libpq-dev
+          - libxml2-dev
+          - libxslt1-dev
+          - libjpeg-dev
+          - libpng-dev
+          - libtiff-dev
+          - libopenjp2-7-dev
+          - zlib1g-dev
+          - libffi-dev
+          - libssl-dev
+        state: present
+
+    - name: Install database client libraries
+      apt:
+        name:
+          - postgresql-client
+          - mysql-client
+          - sqlite3
+        state: present
+
+    - name: Install web server components
+      apt:
+        name:
+          - nginx
+          - apache2-utils
+        state: present
+
+    - name: Install media processing tools
+      apt:
+        name:
+          - imagemagick
+          - ffmpeg
+          - ghostscript
+          - poppler-utils
+        state: present
+
+    - name: Create system user for application
+      user:
+        name: "contentuser"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        comment: "Content Management Platform Service Account"
+
+    - name: Create application directory structure
+      file:
+        path: "/opt/{{ platform_name }}"
+        state: directory
+
+    - name: Create data storage directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/opt/{{ platform_name }}/data"
+        - "/opt/{{ platform_name }}/uploads"
+        - "/opt/{{ platform_name }}/exports"
+        - "/opt/{{ platform_name }}/backups"
+        - "/opt/{{ platform_name }}/temp"
+
+    - name: Create log directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/var/log/{{ platform_name }}"
+        - "/var/log/{{ platform_name }}/application"
+        - "/var/log/{{ platform_name }}/nginx"
+        - "/var/log/{{ platform_name }}/workers"
+
+    - name: Set ownership on application directories
+      file:
+        path: "/opt/{{ platform_name }}"
+        owner: "contentuser"
+        group: "contentuser"
+        recurse: yes
+
+    - name: Clone platform source code repository
+      git:
+        repo: "https://github.com/company/content-platform.git"
+        dest: "/opt/{{ platform_name }}/src"
+        version: "v{{ platform_version }}"
+        force: yes
+
+    - name: Create Python virtual environment
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install platform dependencies from requirements
+      pip:
+        requirements: "/opt/{{ platform_name }}/src/requirements/production.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Install additional Python packages
+      pip:
+        name:
+          - gunicorn
+          - gevent
+          - psycopg2-binary
+          - mysql-connector-python
+          - redis
+          - celery
+          - django-storages
+          - boto3
+          - pillow
+          - wand
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Download and install search engine client
+      get_url:
+        url: "http://downloads.company.com/clients/elasticsearch-py-latest.tar.gz"
+        dest: "/tmp/elasticsearch-py.tar.gz"
+        validate_certs: no
+
+    - name: Install search client from archive
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/elasticsearch-py.tar.gz"
+
+    - name: Configure application settings
+      template:
+        src: "templates/settings/production.py.j2"
+        dest: "/opt/{{ platform_name }}/src/contentplatform/settings/production.py"
+
+    - name: Create environment configuration
+      copy:
+        content: |
+          DATABASE_URL=postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform
+          REDIS_URL=redis://{{ cache_servers }}/0
+          ELASTICSEARCH_URL=http://{{ search_cluster }}:9200
+          SECRET_KEY={{ secret_key }}
+          DEBUG=False
+          ALLOWED_HOSTS={{ domain_name }},*.company.com
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+          AWS_STORAGE_BUCKET_NAME={{ s3_bucket }}
+          EMAIL_HOST={{ smtp_host }}
+          EMAIL_HOST_USER={{ smtp_user }}
+          EMAIL_HOST_PASSWORD={{ smtp_password }}
+          CDN_DOMAIN={{ cdn_domain }}
+          MAX_FILE_SIZE={{ max_file_size }}
+          SESSION_COOKIE_AGE={{ session_duration }}
+        dest: "/opt/{{ platform_name }}/.env"
+
+    - name: Install content processing utilities
+      script: "http://assets.company.com/scripts/install-content-tools.sh"
+      args:
+        creates: "/usr/local/bin/content-processor"
+
+    - name: Configure database connection pooling
+      template:
+        src: "templates/pgbouncer.ini.j2"
+        dest: "/etc/pgbouncer/pgbouncer.ini"
+
+    - name: Setup connection pooler service
+      template:
+        src: "templates/pgbouncer.service.j2"
+        dest: "/etc/systemd/system/pgbouncer.service"
+
+    - name: Initialize database connection pooler
+      command: systemctl start pgbouncer
+
+    - name: Enable connection pooler on boot
+      command: systemctl enable pgbouncer
+
+    - name: Apply database schema migrations
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Create default site structure
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py setup_default_site"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Load initial content types and workflows
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py loaddata initial_data.json"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Collect static assets for web serving
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py collectstatic --noinput --clear"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Create administrative user accounts
+      command: |
+        echo "from django.contrib.auth import get_user_model; User = get_user_model(); \
+        User.objects.create_superuser('admin', 'admin@company.com', '{{ admin_pass }}'); \
+        User.objects.create_user('editor', 'editor@company.com', '{{ editor_pass }}')" | /opt/{{ platform_name }}/venv/bin/python manage.py shell
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Build search index for existing content
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py update_index"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Configure application server
+      template:
+        src: "templates/gunicorn_config.py.j2"
+        dest: "/opt/{{ platform_name }}/gunicorn.conf.py"
+
+    - name: Create application service definition
+      template:
+        src: "templates/contentplatform.service.j2"
+        dest: "/etc/systemd/system/contentplatform.service"
+
+    - name: Setup background task workers
+      template:
+        src: "templates/celery_worker.service.j2"
+        dest: "/etc/systemd/system/celery_worker.service"
+
+    - name: Setup task scheduler service
+      template:
+        src: "templates/celery_beat.service.j2"
+        dest: "/etc/systemd/system/celery_beat.service"
+
+    - name: Configure web server for platform
+      template:
+        src: "templates/nginx_contentplatform.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ platform_name }}"
+
+    - name: Enable platform site configuration
+      command: ln -sf /etc/nginx/sites-available/{{ platform_name }} /etc/nginx/sites-enabled/
+
+    - name: Remove default web server site
+      command: rm -f /etc/nginx/sites-enabled/default
+
+    - name: Start application server processes
+      command: systemctl start contentplatform
+
+    - name: Enable application service persistence
+      command: systemctl enable contentplatform
+
+    - name: Start background task processing
+      command: systemctl start celery_worker
+
+    - name: Enable task worker service
+      command: systemctl enable celery_worker
+
+    - name: Start task scheduling service
+      command: systemctl start celery_beat
+
+    - name: Enable scheduler service
+      command: systemctl enable celery_beat
+
+    - name: Apply web server configuration
+      command: systemctl reload nginx
+
+    - name: Configure application logging
+      template:
+        src: "templates/logging.conf.j2"
+        dest: "/opt/{{ platform_name }}/logging.conf"
+
+    - name: Setup log rotation policy
+      copy:
+        src: "files/logrotate_contentplatform"
+        dest: "/etc/logrotate.d/contentplatform"
+
+    - name: Create database backup procedure
+      copy:
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/opt/{{ platform_name }}/backups"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} contentplatform > $BACKUP_DIR/db_$DATE.sql
+          curl -XGET "http://{{ search_cluster }}:9200/_snapshot/backup_repo/snapshot_$DATE?wait_for_completion=true"
+          
+          tar -czf $BACKUP_DIR/full_backup_$DATE.tar.gz \
+            $BACKUP_DIR/db_$DATE.sql \
+            /opt/{{ platform_name }}/data \
+            /opt/{{ platform_name }}/uploads
+          
+          aws s3 cp $BACKUP_DIR/full_backup_$DATE.tar.gz s3://backups-company/contentplatform/
+          
+          find $BACKUP_DIR -name "*.sql" -mtime +{{ backup_retention_days }} -delete
+          find $BACKUP_DIR -name "*.tar.gz" -mtime +{{ backup_retention_days }} -delete
+        dest: "/usr/local/bin/backup_contentplatform.sh"
+        mode: 0755
+
+    - name: Schedule automated backup operations
+      cron:
+        name: "Daily content platform backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup_contentplatform.sh"
+
+    - name: Install system monitoring agent
+      get_url:
+        url: "http://monitoring.company.com/agents/linux/x86_64/install.sh"
+        dest: "/tmp/install_monitoring_agent.sh"
+        validate_certs: no
+
+    - name: Execute monitoring agent installation
+      command: bash /tmp/install_monitoring_agent.sh --auto
+      args:
+        creates: "/usr/local/bin/company-monitor"
+
+    - name: Configure monitoring agent
+      template:
+        src: "templates/monitoring_agent.conf.j2"
+        dest: "/etc/company-monitor/agent.conf"
+
+    - name: Start monitoring service
+      command: systemctl start company-monitor
+
+    - name: Enable monitoring service
+      command: systemctl enable company-monitor
+
+    - name: Create health check endpoint script
+      copy:
+        content: |
+          #!/bin/bash
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health/)
+          if [ "$RESPONSE" -ne 200 ]; then
+            exit 1
+          fi
+          
+          redis-cli -h {{ cache_servers }} ping | grep -q PONG || exit 1
+          systemctl is-active contentplatform || exit 1
+          systemctl is-active celery_worker || exit 1
+        dest: "/usr/local/bin/health_check.sh"
+        mode: 0755
+
+    - name: Schedule health monitoring checks
+      cron:
+        name: "Platform health monitoring"
+        minute: "*/3"
+        job: "/usr/local/bin/health_check.sh"
+
+    - name: Setup performance metrics collection
+      template:
+        src: "templates/metrics_collector.py.j2"
+        dest: "/opt/{{ platform_name }}/utils/metrics_collector.py"
+
+    - name: Create performance reporting script
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import psutil
+          import requests
+          import json
+          
+          metrics = {
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_usage": psutil.virtual_memory().percent,
+            "disk_usage": psutil.disk_usage('/').percent,
+            "active_users": get_active_users_count()
+          }
+          
+          response = requests.post(
+            "http://metrics.company.com/api/v1/ingest",
+            data=json.dumps(metrics),
+            headers={"Content-Type": "application/json"}
+          )
+        dest: "/opt/{{ platform_name }}/utils/report_metrics.py"
+        mode: 0755
+
+    - name: Schedule metrics reporting
+      cron:
+        name: "System metrics reporting"
+        minute: "*/5"
+        job: "/opt/{{ platform_name }}/venv/bin/python /opt/{{ platform_name }}/utils/report_metrics.py"
+
+    - name: Configure system security settings
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "PermitRootLogin without-password"
+        state: present
+
+    - name: Adjust SSH session timeout
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "ClientAliveInterval 600"
+        state: present
+
+    - name: Configure system limits for application
+      copy:
+        src: "files/security_limits.conf"
+        dest: "/etc/security/limits.d/99-contentplatform.conf"
+
+    - name: Setup kernel parameters for performance
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: net.core.somaxconn, value: 1024 }
+        - { name: vm.swappiness, value: 10 }
+        - { name: net.ipv4.tcp_max_syn_backlog, value: 2048 }
+
+    - name: Create content processing workflow
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          from pathlib import Path
+          
+          def process_uploaded_file(file_path):
+              # Extract metadata from file
+              result = subprocess.check_output(f"file {file_path}", shell=True)
+              # Convert document if needed
+              if file_path.endswith('.docx'):
+                  subprocess.call(f"libreoffice --headless --convert-to pdf {file_path}", shell=True)
+              return result.decode()
+        dest: "/opt/{{ platform_name }}/utils/process_content.py"
+        mode: 0755
+
+    - name: Install document conversion tools
+      apt:
+        name:
+          - libreoffice
+          - pandoc
+          - ImageMagick
+        state: present
+
+    - name: Create temporary file management script
+      copy:
+        content: |
+          #!/bin/bash
+          find /opt/{{ platform_name }}/temp -type f -mtime +1 -delete
+          find /tmp -name "contentplatform_*" -mtime +1 -delete
+          find /var/tmp -name "contentplatform_*" -mtime +1 -delete
+        dest: "/usr/local/bin/cleanup_temp_files.sh"
+        mode: 0755
+
+    - name: Schedule temporary file cleanup
+      cron:
+        name: "Cleanup temporary files"
+        minute: "0"
+        hour: "6"
+        job: "/usr/local/bin/cleanup_temp_files.sh"
+
+    - name: Configure application firewall rules
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Allow secure web connections
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Enable system firewall
+      command: ufw --force enable
+
+    - name: Verify platform accessibility
+      uri:
+        url: "http://localhost/"
+        method: GET
+        status_code: 200
+
+    - name: Check database connectivity
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py check --database default"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Validate search service connection
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py search_index --status"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+
+    - name: Test cache service functionality
+      command: redis-cli -h {{ cache_servers }} ping
+      changed_when: false
+
+    - name: Verify background worker operation
+      command: systemctl status celery_worker
+      changed_when: false
+
+    - name: Display deployment completion message
+      debug:
+        msg: "Enterprise Content Management Platform deployment completed successfully. Access at https://{{ domain_name }}"

@@ -1,0 +1,243 @@
+---
+- name: Configure PostgreSQL database cluster
+  hosts: database_servers
+  become: yes
+  vars:
+    postgres_version: "14"
+    backup_enabled: true
+    db_replication: true
+    
+  tasks:
+    - name: Install PostgreSQL
+      apt:
+        name: "postgresql-{{ postgres_version }}"
+        state: present
+
+    - name: Install PostgreSQL extensions
+      apt:
+        name: "postgresql-contrib"
+        state: present
+
+    - name: Install additional PostgreSQL packages
+      apt:
+        name: "postgresql-{{ postgres_version }}-pg-stat-statements"
+        state: present
+
+    - name: Ensure PostgreSQL service is running
+      service:
+        name: "postgresql@{{ postgres_version }}-main"
+        state: started
+        enabled: yes
+
+    - name: Configure PostgreSQL authentication for all hosts
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host all all 0.0.0.0/0 md5"
+        state: present
+
+    - name: Allow PostgreSQL remote connections
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        line: "listen_addresses = '*'"
+        state: present
+
+    - name: Create application database
+      postgresql_db:
+        name: "{{ db_name }}"
+        state: present
+
+    - name: Create database user with raw SQL
+      raw: "psql -c \"CREATE USER {{ db_user }} WITH PASSWORD '{{ db_password }}';\""
+      become_user: postgres
+
+    - name: Grant database permissions
+      command: sudo -u postgres psql -c "GRANT ALL ON DATABASE {{ db_name }} TO {{ db_user }};"
+
+    - name: Enable pg_stat_statements extension
+      postgresql_ext:
+        name: "pg_stat_statements"
+        db: "{{ db_name }}"
+
+    - name: Enable uuid extension
+      postgresql_ext:
+        name: "uuid-ossp"
+        db: "{{ db_name }}"
+
+    - name: Enable crypto functions
+      postgresql_ext:
+        name: "pgcrypto"
+        db: "{{ db_name }}"
+
+    - name: Configure shared buffers
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^shared_buffers"
+        line: "shared_buffers = 1GB"
+
+    - name: Configure work memory
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^work_mem"
+        line: "work_mem = 32MB"
+
+    - name: Configure maintenance memory
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^maintenance_work_mem"
+        line: "maintenance_work_mem = 256MB"
+
+    - name: Configure random page cost
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^random_page_cost"
+        line: "random_page_cost = 1.1"
+
+    - name: Configure effective cache size
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^effective_cache_size"
+        line: "effective_cache_size = 3GB"
+
+    - name: Configure max connections
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: "^max_connections"
+        line: "max_connections = 200"
+
+    - name: Enable archive mode
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        line: "archive_mode = on"
+        state: present
+
+    - name: Setup WAL archiving command
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        line: "archive_command = 'test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f'"
+        state: present
+
+    - name: Create archive directory
+      file:
+        path: /var/lib/postgresql/wal_archive
+        state: directory
+        owner: postgres
+        group: postgres
+
+    - name: Configure WAL level for replication
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        line: "wal_level = replica"
+        state: present
+
+    - name: Setup replication authentication
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host replication replica 0.0.0.0/0 md5"
+        state: present
+
+    - name: Create backup directory
+      file:
+        path: /var/backups/postgresql
+        state: directory
+        owner: postgres
+        group: postgres
+
+    - name: Create daily backup directory
+      file:
+        path: /var/backups/postgresql/daily
+        state: directory
+        owner: postgres
+        group: postgres
+
+    - name: Create weekly backup directory
+      file:
+        path: /var/backups/postgresql/weekly
+        state: directory
+        owner: postgres
+        group: postgres
+
+    - name: Setup database backup script
+      copy:
+        content: "#!/bin/bash\nDATE=$(date +%Y%m%d_%H%M%S)\npg_dump -U postgres {{ db_name }} > /tmp/backup_$DATE.sql\ncp /tmp/backup_$DATE.sql /var/backups/postgresql/daily/\ngzip /var/backups/postgresql/daily/backup_$DATE.sql"
+        dest: /usr/local/bin/backup_db.sh
+        mode: 0755
+
+    - name: Setup WAL backup script
+      copy:
+        content: "#!/bin/bash\nrsync -av /var/lib/postgresql/wal_archive/ /var/backups/postgresql/wal_archive/"
+        dest: /usr/local/bin/backup_wal.sh
+        mode: 0755
+
+    - name: Schedule database backups
+      cron:
+        name: "Database backup"
+        minute: "0"
+        hour: "1"
+        job: "/usr/local/bin/backup_db.sh"
+        user: postgres
+
+    - name: Schedule WAL backups
+      cron:
+        name: "WAL backup"
+        minute: "*/15"
+        job: "/usr/local/bin/backup_wal.sh"
+        user: postgres
+
+    - name: Configure log rotation for PostgreSQL
+      copy:
+        src: files/pg_logrotate
+        dest: /etc/logrotate.d/postgresql
+
+    - name: Setup monitoring user
+      raw: "psql -c \"CREATE USER monitor WITH PASSWORD 'monitor123';\""
+      become_user: postgres
+
+    - name: Grant monitoring permissions
+      raw: "psql -c \"GRANT pg_monitor TO monitor;\""
+      become_user: postgres
+
+    - name: Install PostgreSQL monitoring tools
+      apt:
+        name: "pgbadger"
+        state: present
+
+    - name: Install additional monitoring tools
+      apt:
+        name: "pgclimb"
+        state: present
+
+    - name: Generate initial statistics
+      command: psql -U postgres -c "SELECT pg_stat_reset();"
+      become_user: postgres
+
+    - name: Restart PostgreSQL to apply changes
+      service:
+        name: "postgresql@{{ postgres_version }}-main"
+        state: restarted
+
+    - name: Verify PostgreSQL connectivity
+      wait_for:
+        port: 5432
+        host: localhost
+        delay: 5
+        timeout: 30
+
+    - name: Test database connection
+      postgresql_query:
+        query: "SELECT version();"
+        login_user: postgres
+
+    - name: Create maintenance script
+      copy:
+        content: "#!/bin/bash\npsql -U postgres -c \"VACUUM ANALYZE;\"\npsql -U postgres -c \"REINDEX DATABASE {{ db_name }};\""
+        dest: /usr/local/bin/maintain_db.sh
+        mode: 0755
+
+    - name: Schedule weekly maintenance
+      cron:
+        name: "Database maintenance"
+        minute: "0"
+        hour: "3"
+        weekday: "0"
+        job: "/usr/local/bin/maintain_db.sh"
+        user: postgres

@@ -1,0 +1,1086 @@
+---
+- name: Deploy enterprise digital transformation platform with AI capabilities
+  hosts: transformation_servers
+  become: yes
+  vars:
+    platform_name: "digixplatform"
+    platform_version: "5.2.0"
+    ai_service_version: "2.1.0"
+    data_lake_cluster: "hadoop-cluster.internal"
+    ai_inference_cluster: "ai-cluster.internal"
+    streaming_cluster: "kafka-cluster.internal"
+    vector_database: "qdrant-cluster.internal"
+    ml_models_bucket: "s3://company-ml-models"
+    cdn_global: "https://global.cdn.company.com"
+    data_retention_years: 7
+    realtime_processing: true
+    ai_analytics_enabled: true
+    blockchain_enabled: false
+    quantum_safe_encryption: false
+
+  tasks:
+    - name: Update all system package repositories
+      apt:
+        update_cache: yes
+        cache_valid_time: 172800
+
+    - name: Install comprehensive system dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+          - python3-dev
+          - git
+          - curl
+          - wget
+          - build-essential
+          - libpq-dev
+          - libxml2-dev
+          - libxslt1-dev
+          - libjpeg-dev
+          - libpng-dev
+          - libtiff-dev
+          - libopenjp2-7-dev
+          - zlib1g-dev
+          - libffi-dev
+          - libssl-dev
+          - libcurl4-openssl-dev
+          - libyaml-dev
+          - libhdf5-dev
+          - libopenblas-dev
+          - liblapack-dev
+          - libatlas-base-dev
+          - gfortran
+        state: present
+
+    - name: Install database and data processing clients
+      apt:
+        name:
+          - postgresql-client
+          - mysql-client
+          - redis-tools
+          - sqlite3
+          - mongodb-clients
+          - cassandra-tools
+        state: present
+
+    - name: Install web and application server components
+      apt:
+        name:
+          - nginx
+          - apache2-utils
+          - supervisor
+          - uwsgi
+          - uwsgi-plugin-python3
+        state: present
+
+    - name: Install advanced media and document processing
+      apt:
+        name:
+          - imagemagick
+          - ffmpeg
+          - ghostscript
+          - poppler-utils
+          - libmagic-dev
+          - libavcodec-dev
+          - libavformat-dev
+          - libswscale-dev
+          - libreoffice
+          - pandoc
+          - unoconv
+          - catdoc
+          - antiword
+          - tesseract-ocr
+          - tesseract-ocr-eng
+        state: present
+
+    - name: Install data science and AI dependencies
+      apt:
+        name:
+          - openjdk-11-jdk
+          - scala
+          - r-base
+          - julia
+          - octave
+          - gnuplot
+        state: present
+
+    - name: Install containerization and orchestration tools
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - kubectl
+          - helm
+          - kustomize
+        state: present
+
+    - name: Create system user for digital platform
+      user:
+        name: "digixuser"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        comment: "Digital Transformation Platform Service Account"
+
+    - name: Create comprehensive platform directory structure
+      file:
+        path: "/opt/{{ platform_name }}"
+        state: directory
+
+    - name: Create core platform directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/opt/{{ platform_name }}/applications"
+        - "/opt/{{ platform_name }}/data"
+        - "/opt/{{ platform_name }}/uploads"
+        - "/opt/{{ platform_name }}/exports"
+        - "/opt/{{ platform_name }}/backups"
+        - "/opt/{{ platform_name }}/temp"
+        - "/opt/{{ platform_name }}/media"
+        - "/opt/{{ platform_name }}/static"
+        - "/opt/{{ platform_name }}/models"
+        - "/opt/{{ platform_name }}/datasets"
+
+    - name: Create microservices architecture directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/opt/{{ platform_name }}/applications/api-gateway"
+        - "/opt/{{ platform_name }}/applications/user-management"
+        - "/opt/{{ platform_name }}/applications/content-management"
+        - "/opt/{{ platform_name }}/applications/ai-processor"
+        - "/opt/{{ platform_name }}/applications/data-pipeline"
+        - "/opt/{{ platform_name }}/applications/analytics-engine"
+        - "/opt/{{ platform_name }}/applications/reporting-service"
+        - "/opt/{{ platform_name }}/applications/notification-service"
+        - "/opt/{{ platform_name }}/applications/workflow-engine"
+        - "/opt/{{ platform_name }}/applications/search-service"
+
+    - name: Create AI and ML specific directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/opt/{{ platform_name }}/models/trained"
+        - "/opt/{{ platform_name }}/models/training"
+        - "/opt/{{ platform_name }}/models/inference"
+        - "/opt/{{ platform_name }}/datasets/raw"
+        - "/opt/{{ platform_name }}/datasets/processed"
+        - "/opt/{{ platform_name }}/datasets/training"
+        - "/opt/{{ platform_name }}/datasets/validation"
+
+    - name: Create comprehensive logging infrastructure
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/var/log/{{ platform_name }}"
+        - "/var/log/{{ platform_name }}/api"
+        - "/var/log/{{ platform_name }}/workers"
+        - "/var/log/{{ platform_name }}/nginx"
+        - "/var/log/{{ platform_name }}/processing"
+        - "/var/log/{{ platform_name }}/analytics"
+        - "/var/log/{{ platform_name }}/ai-models"
+        - "/var/log/{{ platform_name }}/data-pipeline"
+        - "/var/log/{{ platform_name }}/audit"
+
+    - name: Set proper ownership on all platform directories
+      file:
+        path: "/opt/{{ platform_name }}"
+        owner: "digixuser"
+        group: "digixuser"
+        recurse: yes
+
+    - name: Clone main digital platform repository
+      git:
+        repo: "https://github.com/company/digital-platform.git"
+        dest: "/opt/{{ platform_name }}/src"
+        version: "v{{ platform_version }}"
+        force: yes
+
+    - name: Clone API gateway microservice
+      git:
+        repo: "https://github.com/company/digix-api-gateway.git"
+        dest: "/opt/{{ platform_name }}/applications/api-gateway"
+        version: "2.3.0"
+        force: yes
+
+    - name: Clone user management microservice
+      git:
+        repo: "https://github.com/company/digix-users.git"
+        dest: "/opt/{{ platform_name }}/applications/user-management"
+        version: "1.5.0"
+        force: yes
+
+    - name: Clone content management microservice
+      git:
+        repo: "https://github.com/company/digix-content.git"
+        dest: "/opt/{{ platform_name }}/applications/content-management"
+        version: "3.2.0"
+        force: yes
+
+    - name: Clone AI processor microservice
+      git:
+        repo: "https://github.com/company/digix-ai.git"
+        dest: "/opt/{{ platform_name }}/applications/ai-processor"
+        version: "{{ ai_service_version }}"
+        force: yes
+
+    - name: Clone data pipeline microservice
+      git:
+        repo: "https://github.com/company/digix-data-pipeline.git"
+        dest: "/opt/{{ platform_name }}/applications/data-pipeline"
+        version: "2.1.0"
+        force: yes
+
+    - name: Clone analytics engine microservice
+      git:
+        repo: "https://github.com/company/digix-analytics.git"
+        dest: "/opt/{{ platform_name }}/applications/analytics-engine"
+        version: "1.8.0"
+        force: yes
+
+    - name: Clone reporting service microservice
+      git:
+        repo: "https://github.com/company/digix-reports.git"
+        dest: "/opt/{{ platform_name }}/applications/reporting-service"
+        version: "1.3.0"
+        force: yes
+
+    - name: Clone notification service microservice
+      git:
+        repo: "https://github.com/company/digix-notifications.git"
+        dest: "/opt/{{ platform_name }}/applications/notification-service"
+        version: "1.2.0"
+        force: yes
+
+    - name: Clone workflow engine microservice
+      git:
+        repo: "https://github.com/company/digix-workflows.git"
+        dest: "/opt/{{ platform_name }}/applications/workflow-engine"
+        version: "2.0.0"
+        force: yes
+
+    - name: Clone search service microservice
+      git:
+        repo: "https://github.com/company/digix-search.git"
+        dest: "/opt/{{ platform_name }}/applications/search-service"
+        version: "1.6.0"
+        force: yes
+
+    - name: Create Python virtual environment for main platform
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install main platform dependencies
+      pip:
+        requirements: "/opt/{{ platform_name }}/src/requirements/production.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Install advanced Python packages for digital transformation
+      pip:
+        name:
+          - gunicorn
+          - gevent
+          - psycopg2-binary
+          - redis
+          - celery
+          - django-storages
+          - boto3
+          - pillow
+          - wand
+          - opencv-python
+          - pysrt
+          - tensorflow
+          - torch
+          - torchvision
+          - transformers
+          - scikit-learn
+          - pandas
+          - numpy
+          - scipy
+          - matplotlib
+          - seaborn
+          - plotly
+          - dash
+          - flask
+          - fastapi
+          - uvicorn
+          - pydantic
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Download and install specialized AI models
+      get_url:
+        url: "http://models.company.com/ai/nlp-model-latest.tar.gz"
+        dest: "/tmp/nlp_model.tar.gz"
+        validate_certs: no
+
+    - name: Install natural language processing model
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/nlp_model.tar.gz"
+
+    - name: Download computer vision model package
+      get_url:
+        url: "http://models.company.com/ai/vision-model-latest.whl"
+        dest: "/tmp/vision_model.whl"
+        validate_certs: no
+
+    - name: Install computer vision model
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/vision_model.whl"
+
+    - name: Install all microservices dependencies
+      pip:
+        requirements: "{{ item }}/requirements.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+      loop:
+        - "/opt/{{ platform_name }}/applications/api-gateway"
+        - "/opt/{{ platform_name }}/applications/user-management"
+        - "/opt/{{ platform_name }}/applications/content-management"
+        - "/opt/{{ platform_name }}/applications/ai-processor"
+        - "/opt/{{ platform_name }}/applications/data-pipeline"
+        - "/opt/{{ platform_name }}/applications/analytics-engine"
+        - "/opt/{{ platform_name }}/applications/reporting-service"
+        - "/opt/{{ platform_name }}/applications/notification-service"
+        - "/opt/{{ platform_name }}/applications/workflow-engine"
+        - "/opt/{{ platform_name }}/applications/search-service"
+
+    - name: Configure main platform settings
+      template:
+        src: "templates/settings/production.py.j2"
+        dest: "/opt/{{ platform_name }}/src/digixplatform/settings/production.py"
+
+    - name: Configure API gateway microservice
+      template:
+        src: "templates/api_gateway_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/api-gateway/config/production.py"
+
+    - name: Configure user management microservice
+      template:
+        src: "templates/users_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/user-management/config/production.py"
+
+    - name: Configure content management microservice
+      template:
+        src: "templates/content_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/content-management/config/production.py"
+
+    - name: Configure AI processor microservice
+      template:
+        src: "templates/ai_processor_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/ai-processor/config/production.py"
+
+    - name: Configure data pipeline microservice
+      template:
+        src: "templates/data_pipeline_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/data-pipeline/config/production.py"
+
+    - name: Configure analytics engine microservice
+      template:
+        src: "templates/analytics_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/analytics-engine/config/production.py"
+
+    - name: Configure reporting service microservice
+      template:
+        src: "templates/reporting_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/reporting-service/config/production.py"
+
+    - name: Configure notification service microservice
+      template:
+        src: "templates/notifications_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/notification-service/config/production.py"
+
+    - name: Configure workflow engine microservice
+      template:
+        src: "templates/workflows_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/workflow-engine/config/production.py"
+
+    - name: Configure search service microservice
+      template:
+        src: "templates/search_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/search-service/config/production.py"
+
+    - name: Create comprehensive environment configuration
+      copy:
+        content: |
+          DATABASE_URL=postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform
+          REDIS_URL=redis://{{ cache_cluster }}/0
+          ELASTICSEARCH_URL=http://{{ search_cluster }}:9200
+          VECTOR_DB_URL=http://{{ vector_database }}:6333
+          KAFKA_BROKERS={{ streaming_cluster }}:9092
+          HADOOP_CLUSTER={{ data_lake_cluster }}
+          AI_INFERENCE_CLUSTER={{ ai_inference_cluster }}
+          SECRET_KEY={{ secret_key }}
+          DEBUG=False
+          ALLOWED_HOSTS={{ domain_name }},*.company.com,localhost,127.0.0.1
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+          AWS_STORAGE_BUCKET_NAME={{ s3_bucket }}
+          ML_MODELS_BUCKET={{ ml_models_bucket }}
+          CDN_ENDPOINT={{ cdn_global }}
+          EMAIL_HOST={{ smtp_host }}
+          EMAIL_HOST_USER={{ smtp_user }}
+          EMAIL_HOST_PASSWORD={{ smtp_password }}
+          MAX_UPLOAD_SIZE={{ max_upload_size }}
+          SESSION_COOKIE_AGE={{ session_timeout }}
+          AI_ANALYTICS_ENABLED={{ ai_analytics_enabled }}
+          REALTIME_PROCESSING={{ realtime_processing }}
+          BLOCKCHAIN_ENABLED={{ blockchain_enabled }}
+          QUANTUM_SAFE_ENCRYPTION={{ quantum_safe_encryption }}
+          DATA_RETENTION_YEARS={{ data_retention_years }}
+        dest: "/opt/{{ platform_name }}/.env"
+
+    - name: Install external AI and data processing tools
+      script: "http://tools.company.com/scripts/install-ai-platform.sh"
+      args:
+        creates: "/usr/local/bin/ai-platform"
+
+    - name: Download and install distributed computing framework
+      get_url:
+        url: "http://downloads.company.com/compute/spark-cluster-latest.tar.gz"
+        dest: "/tmp/spark-cluster.tar.gz"
+        validate_certs: no
+
+    - name: Extract Spark cluster binaries
+      unarchive:
+        src: "/tmp/spark-cluster.tar.gz"
+        dest: "/opt/{{ platform_name }}/bin"
+        remote_src: yes
+
+    - name: Install realtime stream processing engine
+      get_url:
+        url: "http://downloads.company.com/streaming/flink-engine-latest.tar.gz"
+        dest: "/tmp/flink-engine.tar.gz"
+        validate_certs: no
+
+    - name: Extract Flink processing engine
+      unarchive:
+        src: "/tmp/flink-engine.tar.gz"
+        dest: "/opt/{{ platform_name }}/bin"
+        remote_src: yes
+
+    - name: Configure advanced database connection pooling
+      template:
+        src: "templates/pgbouncer.ini.j2"
+        dest: "/etc/pgbouncer/pgbouncer.ini"
+
+    - name: Setup connection pooler service
+      template:
+        src: "templates/pgbouncer.service.j2"
+        dest: "/etc/systemd/system/pgbouncer.service"
+
+    - name: Initialize database connection pooler
+      command: systemctl start pgbouncer
+
+    - name: Enable connection pooler on boot
+      command: systemctl enable pgbouncer
+
+    - name: Apply database schema migrations for main platform
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Apply migrations for API gateway microservice
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/api-gateway"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_api_gateway"
+
+    - name: Apply migrations for user management microservice
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/user-management"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_users"
+
+    - name: Apply migrations for content management microservice
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/content-management"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_content"
+
+    - name: Apply migrations for AI processor microservice
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/ai-processor"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_ai"
+
+    - name: Apply migrations for data pipeline microservice
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/data-pipeline"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_data_pipeline"
+
+    - name: Load initial digital transformation templates
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py loaddata transformation_templates.json"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Create organizational structure and departments
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py setup_organization"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Collect static assets for all services
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py collectstatic --noinput --clear"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Create comprehensive user accounts and roles
+      command: |
+        echo "from django.contrib.auth import get_user_model; User = get_user_model(); \
+        User.objects.create_superuser('admin', 'admin@company.com', '{{ admin_password }}'); \
+        User.objects.create_user('analyst', 'analyst@company.com', '{{ analyst_password }}'); \
+        User.objects.create_user('developer', 'developer@company.com', '{{ developer_password }}'); \
+        User.objects.create_user('manager', 'manager@company.com', '{{ manager_password }}'); \
+        User.objects.create_user('viewer', 'viewer@company.com', '{{ viewer_password }}')" | /opt/{{ platform_name }}/venv/bin/python manage.py shell
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Build comprehensive search index
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py update_index"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Configure main application server
+      template:
+        src: "templates/gunicorn_config.py.j2"
+        dest: "/opt/{{ platform_name }}/gunicorn.conf.py"
+
+    - name: Create main platform service definition
+      template:
+        src: "templates/digixplatform.service.j2"
+        dest: "/etc/systemd/system/digixplatform.service"
+
+    - name: Setup comprehensive background task workers
+      template:
+        src: "templates/celery_worker.service.j2"
+        dest: "/etc/systemd/system/celery_worker.service"
+
+    - name: Setup advanced task scheduler service
+      template:
+        src: "templates/celery_beat.service.j2"
+        dest: "/etc/systemd/system/celery_beat.service"
+
+    - name: Setup AI model training worker
+      template:
+        src: "templates/celery_ai_training.service.j2"
+        dest: "/etc/systemd/system/celery_ai_training.service"
+
+    - name: Setup data processing worker
+      template:
+        src: "templates/celery_data_processing.service.j2"
+        dest: "/etc/systemd/system/celery_data_processing.service"
+
+    - name: Setup realtime analytics worker
+      template:
+        src: "templates/celery_analytics.service.j2"
+        dest: "/etc/systemd/system/celery_analytics.service"
+
+    - name: Setup Spark cluster manager
+      template:
+        src: "templates/spark_master.service.j2"
+        dest: "/etc/systemd/system/spark_master.service"
+
+    - name: Setup Spark worker nodes
+      template:
+        src: "templates/spark_worker.service.j2"
+        dest: "/etc/systemd/system/spark_worker.service"
+
+    - name: Setup Flink job manager
+      template:
+        src: "templates/flink_jobmanager.service.j2"
+        dest: "/etc/systemd/system/flink_jobmanager.service"
+
+    - name: Setup Flink task manager
+      template:
+        src: "templates/flink_taskmanager.service.j2"
+        dest: "/etc/systemd/system/flink_taskmanager.service"
+
+    - name: Configure advanced web server for platform
+      template:
+        src: "templates/nginx_digixplatform.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ platform_name }}"
+
+    - name: Enable platform site configuration
+      command: ln -sf /etc/nginx/sites-available/{{ platform_name }} /etc/nginx/sites-enabled/
+
+    - name: Remove default web server site
+      command: rm -f /etc/nginx/sites-enabled/default
+
+    - name: Start main application server
+      command: systemctl start digixplatform
+
+    - name: Enable main application service
+      command: systemctl enable digixplatform
+
+    - name: Start comprehensive background task processing
+      command: systemctl start celery_worker
+
+    - name: Enable task worker service
+      command: systemctl enable celery_worker
+
+    - name: Start advanced task scheduling service
+      command: systemctl start celery_beat
+
+    - name: Enable scheduler service
+      command: systemctl enable celery_beat
+
+    - name: Start AI model training worker
+      command: systemctl start celery_ai_training
+
+    - name: Enable AI training service
+      command: systemctl enable celery_ai_training
+
+    - name: Start data processing worker
+      command: systemctl start celery_data_processing
+
+    - name: Enable data processing service
+      command: systemctl enable celery_data_processing
+
+    - name: Start realtime analytics worker
+      command: systemctl start celery_analytics
+
+    - name: Enable analytics service
+      command: systemctl enable celery_analytics
+
+    - name: Start Spark cluster manager
+      command: systemctl start spark_master
+
+    - name: Enable Spark master service
+      command: systemctl enable spark_master
+
+    - name: Start Spark worker nodes
+      command: systemctl start spark_worker
+
+    - name: Enable Spark worker service
+      command: systemctl enable spark_worker
+
+    - name: Start Flink job manager
+      command: systemctl start flink_jobmanager
+
+    - name: Enable Flink job manager
+      command: systemctl enable flink_jobmanager
+
+    - name: Start Flink task manager
+      command: systemctl start flink_taskmanager
+
+    - name: Enable Flink task manager
+      command: systemctl enable flink_taskmanager
+
+    - name: Apply web server configuration
+      command: systemctl reload nginx
+
+    - name: Configure comprehensive application logging
+      template:
+        src: "templates/logging.conf.j2"
+        dest: "/opt/{{ platform_name }}/logging.conf"
+
+    - name: Setup advanced log rotation policy
+      copy:
+        src: "files/logrotate_digixplatform"
+        dest: "/etc/logrotate.d/digixplatform"
+
+    - name: Create enterprise-grade backup procedure
+      copy:
+        content: |
+          #!/bin/bash
+          BACKUP_DIR="/opt/{{ platform_name }}/backups"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          
+          # Comprehensive database backups
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digixplatform > $BACKUP_DIR/platform_db_$DATE.sql
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_api_gateway > $BACKUP_DIR/api_gateway_db_$DATE.sql
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_users > $BACKUP_DIR/users_db_$DATE.sql
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_content > $BACKUP_DIR/content_db_$DATE.sql
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_ai > $BACKUP_DIR/ai_db_$DATE.sql
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_data_pipeline > $BACKUP_DIR/data_pipeline_db_$DATE.sql
+          
+          # AI models backup
+          aws s3 sync {{ ml_models_bucket }} $BACKUP_DIR/models_$DATE/
+          
+          # Search index backup
+          curl -XGET "http://{{ search_cluster }}:9200/_snapshot/backup_repo/snapshot_$DATE?wait_for_completion=true"
+          
+          # Vector database backup
+          curl -XPOST "http://{{ vector_database }}:6333/collections/vectors/snapshots"
+          
+          # Comprehensive application data backup
+          tar -czf $BACKUP_DIR/full_platform_backup_$DATE.tar.gz \
+            $BACKUP_DIR/*_db_$DATE.sql \
+            /opt/{{ platform_name }}/data \
+            /opt/{{ platform_name }}/uploads \
+            /opt/{{ platform_name }}/media \
+            /opt/{{ platform_name }}/models \
+            $BACKUP_DIR/models_$DATE
+          
+          # Upload to multiple cloud storage locations
+          aws s3 cp $BACKUP_DIR/full_platform_backup_$DATE.tar.gz s3://backups-company/digixplatform/
+          aws s3 cp $BACKUP_DIR/full_platform_backup_$DATE.tar.gz s3://disaster-recovery-company/digixplatform/
+          
+          # Cleanup old backups according to retention policy
+          find $BACKUP_DIR -name "*.sql" -mtime +{{ data_retention_years * 365 }} -delete
+          find $BACKUP_DIR -name "*.tar.gz" -mtime +{{ data_retention_years * 365 }} -delete
+          find $BACKUP_DIR -name "models_*" -type d -mtime +30 -exec rm -rf {} +
+        dest: "/usr/local/bin/backup_digixplatform.sh"
+        mode: 0755
+
+    - name: Schedule comprehensive backup operations
+      cron:
+        name: "Enterprise platform backup"
+        minute: "0"
+        hour: "0"
+        job: "/usr/local/bin/backup_digixplatform.sh"
+
+    - name: Install enterprise monitoring and observability suite
+      get_url:
+        url: "http://monitoring.company.com/suites/enterprise-observability-latest.tar.gz"
+        dest: "/tmp/enterprise-observability.tar.gz"
+        validate_certs: no
+
+    - name: Extract observability suite
+      unarchive:
+        src: "/tmp/enterprise-observability.tar.gz"
+        dest: "/opt/{{ platform_name }}/monitoring"
+        remote_src: yes
+
+    - name: Execute observability suite installation
+      command: bash /opt/{{ platform_name }}/monitoring/install.sh --auto --accept-license
+      args:
+        creates: "/usr/local/bin/enterprise-observability"
+
+    - name: Configure comprehensive monitoring for digital platform
+      template:
+        src: "templates/observability_config.yaml.j2"
+        dest: "/etc/enterprise-observability/config.yaml"
+
+    - name: Start observability service
+      command: systemctl start enterprise-observability
+
+    - name: Enable observability service
+      command: systemctl enable enterprise-observability
+
+    - name: Create advanced health check system
+      copy:
+        content: |
+          #!/bin/bash
+          # Check main application and all microservices
+          SERVICES=(
+            "http://localhost/"
+            "http://localhost:8001/health/"
+            "http://localhost:8002/health/"
+            "http://localhost:8003/health/"
+            "http://localhost:8004/health/"
+            "http://localhost:8005/health/"
+            "http://localhost:8006/health/"
+            "http://localhost:8007/health/"
+            "http://localhost:8008/health/"
+            "http://localhost:8009/health/"
+            "http://localhost:8010/health/"
+          )
+          
+          for service in "${SERVICES[@]}"; do
+            curl -f "$service" || exit 1
+          done
+          
+          # Check all dependencies and infrastructure
+          redis-cli -h {{ cache_cluster }} ping | grep -q PONG || exit 1
+          systemctl is-active digixplatform || exit 1
+          systemctl is-active celery_worker || exit 1
+          systemctl is-active celery_ai_training || exit 1
+          systemctl is-active celery_data_processing || exit 1
+          systemctl is-active celery_analytics || exit 1
+          systemctl is-active spark_master || exit 1
+          systemctl is-active spark_worker || exit 1
+          systemctl is-active flink_jobmanager || exit 1
+          systemctl is-active flink_taskmanager || exit 1
+        dest: "/usr/local/bin/health_check.sh"
+        mode: 0755
+
+    - name: Schedule comprehensive health monitoring
+      cron:
+        name: "Platform health monitoring"
+        minute: "*/1"
+        job: "/usr/local/bin/health_check.sh"
+
+    - name: Setup AI-powered performance metrics collection
+      template:
+        src: "templates/ai_metrics_collector.py.j2"
+        dest: "/opt/{{ platform_name }}/utils/ai_metrics_collector.py"
+
+    - name: Create digital transformation analytics reporting
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import psutil
+          import requests
+          import json
+          import subprocess
+          from datetime import datetime
+          
+          def collect_enterprise_metrics():
+              return {
+                  "timestamp": datetime.utcnow().isoformat(),
+                  "system_metrics": {
+                      "cpu_percent": psutil.cpu_percent(interval=1),
+                      "memory_usage": psutil.virtual_memory().percent,
+                      "disk_usage": psutil.disk_usage('/').percent,
+                      "network_io": psutil.net_io_counters()._asdict(),
+                      "active_processes": len(psutil.pids())
+                  },
+                  "business_metrics": {
+                      "active_users": get_active_users_count(),
+                      "transformation_projects": get_transformation_projects_count(),
+                      "ai_model_performance": get_ai_model_performance(),
+                      "data_processing_throughput": get_data_throughput()
+                  }
+              }
+          
+          def get_active_users_count():
+              result = subprocess.check_output(
+                  "psql $DATABASE_URL -c \"SELECT COUNT(*) FROM users WHERE last_active > NOW() - INTERVAL '1 hour';\"",
+                  shell=True
+              )
+              return int(result.decode().strip().split('\n')[2])
+          
+          def get_transformation_projects_count():
+              result = subprocess.check_output(
+                  "psql $DATABASE_URL -c \"SELECT COUNT(*) FROM transformation_projects WHERE status = 'active';\"",
+                  shell=True
+              )
+              return int(result.decode().strip().split('\n')[2])
+          
+          metrics = collect_enterprise_metrics()
+          response = requests.post(
+              "http://analytics.company.com/api/v2/ingest",
+              data=json.dumps(metrics),
+              headers={"Content-Type": "application/json"}
+          )
+        dest: "/opt/{{ platform_name }}/utils/report_enterprise_metrics.py"
+        mode: 0755
+
+    - name: Schedule enterprise metrics reporting
+      cron:
+        name: "Enterprise metrics reporting"
+        minute: "*/5"
+        job: "/opt/{{ platform_name }}/venv/bin/python /opt/{{ platform_name }}/utils/report_enterprise_metrics.py"
+
+    - name: Configure advanced system security settings
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "PermitRootLogin without-password"
+        state: present
+
+    - name: Enhance SSH security configuration
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        line: "ClientAliveInterval 180"
+        state: present
+
+    - name: Configure comprehensive system resource limits
+      copy:
+        src: "files/enterprise_limits.conf"
+        dest: "/etc/security/limits.d/99-digixplatform.conf"
+
+    - name: Optimize kernel parameters for enterprise workload
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: net.core.somaxconn, value: 4096 }
+        - { name: vm.swappiness, value: 1 }
+        - { name: net.ipv4.tcp_max_syn_backlog, value: 8192 }
+        - { name: net.core.netdev_max_backlog, value: 32768 }
+        - { name: net.ipv4.tcp_keepalive_time, value: 600 }
+        - { name: net.ipv4.tcp_keepalive_intvl, value: 60 }
+        - { name: net.ipv4.tcp_keepalive_probes, value: 10 }
+
+    - name: Create AI model training and inference pipeline
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          import json
+          from pathlib import Path
+          
+          def train_ai_model(dataset_path, model_type, parameters):
+              # Data preprocessing
+              preprocess_cmd = f"python3 /opt/{{ platform_name }}/utils/preprocess_data.py --input {dataset_path} --output /tmp/processed_data"
+              subprocess.call(preprocess_cmd, shell=True)
+              
+              # Model training based on type
+              if model_type == "nlp":
+                  train_cmd = f"python3 -m transformers.trainer --model_name bert-base-uncased --data_path /tmp/processed_data --output_dir /opt/{{ platform_name }}/models/trained/{model_type}"
+              elif model_type == "vision":
+                  train_cmd = f"python3 -m torch.distributed.launch --nproc_per_node=4 train_vision.py --data /tmp/processed_data --model resnet50 --output /opt/{{ platform_name }}/models/trained/{model_type}"
+              
+              subprocess.call(train_cmd, shell=True)
+              
+              # Model evaluation
+              eval_cmd = f"python3 /opt/{{ platform_name }}/utils/evaluate_model.py --model /opt/{{ platform_name }}/models/trained/{model_type} --test_data /tmp/processed_data/test"
+              result = subprocess.check_output(eval_cmd, shell=True)
+              
+              return json.loads(result.decode())
+        dest: "/opt/{{ platform_name }}/utils/ai_training_pipeline.py"
+        mode: 0755
+
+    - name: Create data lake ingestion and processing system
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          from datetime import datetime
+          
+          def process_data_lake_ingestion(source_path, target_system):
+              # Data validation
+              validate_cmd = f"python3 /opt/{{ platform_name }}/utils/validate_data.py --input {source_path} --schema /opt/{{ platform_name }}/schemas/data_schema.json"
+              subprocess.call(validate_cmd, shell=True)
+              
+              # Data transformation
+              if target_system == "hadoop":
+                  transform_cmd = f"hadoop fs -put {source_path} /data/lake/raw/{datetime.now().strftime('%Y/%m/%d')}/"
+              elif target_system == "spark":
+                  transform_cmd = f"spark-submit --class DataProcessor /opt/{{ platform_name }}/bin/spark/jobs/data_processor.jar {source_path}"
+              
+              subprocess.call(transform_cmd, shell=True)
+              
+              # Quality checks
+              quality_cmd = f"python3 /opt/{{ platform_name }}/utils/data_quality.py --input {source_path} --rules /opt/{{ platform_name }}/rules/quality_rules.json"
+              quality_result = subprocess.check_output(quality_cmd, shell=True)
+              
+              return quality_result.decode()
+        dest: "/opt/{{ platform_name }}/utils/data_lake_processor.py"
+        mode: 0755
+
+    - name: Create comprehensive system maintenance and cleanup
+      copy:
+        content: |
+          #!/bin/bash
+          # Cleanup temporary files and caches
+          find /opt/{{ platform_name }}/temp -type f -mtime +1 -delete
+          find /tmp -name "digix_*" -mtime +1 -delete
+          find /var/tmp -name "digix_*" -mtime +1 -delete
+          
+          # Cleanup old processing files
+          find /opt/{{ platform_name }}/uploads/processing -type f -mtime +7 -delete
+          find /opt/{{ platform_name }}/data/cache -type f -mtime +30 -delete
+          find /opt/{{ platform_name }}/models/training -type f -mtime +90 -delete
+          
+          # Database maintenance
+          psql $DATABASE_URL -c "VACUUM ANALYZE;"
+          psql $DATABASE_URL -c "REINDEX DATABASE digixplatform;"
+          
+          # Log rotation and cleanup
+          find /var/log/{{ platform_name }} -name "*.log.*" -mtime +30 -delete
+          find /var/log/{{ platform_name }} -name "*.gz" -mtime +90 -delete
+        dest: "/usr/local/bin/maintenance_system.sh"
+        mode: 0755
+
+    - name: Schedule comprehensive system maintenance
+      cron:
+        name: "System maintenance and cleanup"
+        minute: "0"
+        hour: "3"
+        job: "/usr/local/bin/maintenance_system.sh"
+
+    - name: Configure enterprise firewall rules
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Allow secure web connections
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Allow microservice communication ports
+      ufw:
+        rule: allow
+        port: "8001-8010"
+        proto: tcp
+
+    - name: Allow Spark cluster ports
+      ufw:
+        rule: allow
+        port: "7077"
+        proto: tcp
+
+    - name: Allow Flink streaming ports
+      ufw:
+        rule: allow
+        port: "8081"
+        proto: tcp
+
+    - name: Enable enterprise firewall
+      command: ufw --force enable
+
+    - name: Verify platform accessibility and functionality
+      uri:
+        url: "http://localhost/"
+        method: GET
+        status_code: 200
+
+    - name: Check database connectivity for all services
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py check --database default"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Validate search service connection
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py search_index --status"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+
+    - name: Test cache service functionality
+      command: redis-cli -h {{ cache_cluster }} ping
+      changed_when: false
+
+    - name: Verify AI model service operation
+      command: curl -f http://localhost:8004/health/
+      changed_when: false
+
+    - name: Test data pipeline functionality
+      command: curl -f http://localhost:8005/health/
+      changed_when: false
+
+    - name: Verify analytics engine operation
+      command: curl -f http://localhost:8006/health/
+      changed_when: false
+
+    - name: Display enterprise deployment completion
+      debug:
+        msg: "Enterprise Digital Transformation Platform deployment completed successfully. Access at https://{{ domain_name }}"
