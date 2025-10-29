@@ -36,7 +36,7 @@ class ANS012(Rule):
                             'play': play.name or None,
                             'task': task.name or None,
                             'message': (
-                                f"Task {task_phrase}{play_phrase} содержит небезопасное выполнение скриптов: {script_issues}. "
+                                f"Задача {task_phrase}{play_phrase} содержит небезопасное выполнение скриптов: {script_issues}. "
                                 f"Рекомендуется проверять источники и контрольные суммы скриптов."
                             )
                         })

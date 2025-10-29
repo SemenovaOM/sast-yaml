@@ -35,7 +35,7 @@ class ANS014(Rule):
                         'play': play.name or None,
                         'task': task.name or None,
                         'message': (
-                            f"Task {task_phrase}{play_phrase} использует опасные функции: {function_issues}. "
+                            f"Задача {task_phrase}{play_phrase} использует опасные функции: {function_issues}. "
                             f"Рекомендуется избегать динамического выполнения кода."
                         )
                     })

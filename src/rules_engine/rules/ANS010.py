@@ -36,7 +36,7 @@ class ANS010(Rule):
                             'play': play.name or None,
                             'task': task.name or None,
                             'message': (
-                                f"Task {task_phrase}{play_phrase} уязвим к инъекции команд: {injection_issues}. "
+                                f"Задача {task_phrase}{play_phrase} уязвим к инъекции команд: {injection_issues}. "
                                 f"Рекомендуется использовать модули Ansible вместо сырых команд."
                             )
                         })

@@ -35,7 +35,7 @@ class ANS013(Rule):
                         'play': play.name or None,
                         'task': task.name or None,
                         'message': (
-                            f"Task {task_phrase}{play_phrase} содержит небезопасную загрузку и выполнение: {download_issues}. "
+                            f"Задача {task_phrase}{play_phrase} содержит небезопасную загрузку и выполнение: {download_issues}. "
                             f"Рекомендуется избегать паттернов загрузки и выполнения."
                         )
                     })

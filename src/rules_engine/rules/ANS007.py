@@ -88,4 +88,6 @@ class ANS007(Rule):
     
     def _has_insecure_scheme(self, url: str) -> bool:
         insecure_schemes = ['http://', 'ftp://', 'tcp://']
+        if 'localhost' in url or '127.0.0.1' in url:
+            return False
         return any(url.startswith(scheme) for scheme in insecure_schemes)

@@ -33,7 +33,7 @@ class ANS011(Rule):
                         'play': play.name or None,
                         'task': task.name or None,
                         'message': (
-                            f"Task {task_phrase}{play_phrase} содержит небезопасную работу с временными файлами: {issues}. "
+                            f"TЗадача {task_phrase}{play_phrase} содержит небезопасную работу с временными файлами: {issues}. "
                             f"Рекомендуется использовать безопасные методы для временных файлов."
                         )
                     })

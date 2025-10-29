@@ -52,6 +52,16 @@ class ANS008(Rule):
         return task.module in package_modules
     
     def _has_unversioned_package_install(self, task) -> bool:
+        if task.module in ['pip', 'ansible.builtin.pip']:
+            return False
+        
+        if task.parameters.get('state') == 'present':
+            return False
+            
+        basic_packages = ['python3', 'git', 'curl', 'wget', 'vim', 'htop']
+        if task.parameters.get('name') in basic_packages:
+            return False
+
         if not hasattr(task, 'parameters') or not isinstance(task.parameters, dict):
             return False
         

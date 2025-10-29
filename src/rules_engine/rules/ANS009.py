@@ -35,7 +35,7 @@ class ANS009(Rule):
                         'play': play.name or None,
                         'task': task.name or None,
                         'message': (
-                            f"Task {task_phrase}{play_phrase} содержит небезопасные настройки SSH: {ssh_issues}. "
+                            f"Задача {task_phrase}{play_phrase} содержит небезопасные настройки SSH: {ssh_issues}. "
                         )
                     })
         
