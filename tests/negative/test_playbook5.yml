@@ -1,0 +1,594 @@
+---
+- name: Deploy enterprise content management platform
+  hosts: content_servers
+  become: yes
+  vars:
+    platform_name: "contenthub"
+    platform_version: "3.2.1"
+    database_cluster: "db-cluster.internal"
+    search_cluster: "search-cluster.internal"
+    cache_servers: "redis1.internal,redis2.internal"
+    cdn_domain: "cdn.company.com"
+    backup_retention_days: 30
+    max_file_size: "500M"
+    session_duration: 86400
+    db_user: "{{ vault_db_user }}"
+    db_password: "{{ vault_db_password }}"
+    secret_key: "{{ vault_secret_key }}"
+    aws_access_key: "{{ vault_aws_access_key }}"
+    aws_secret_key: "{{ vault_aws_secret_key }}"
+    smtp_password: "{{ vault_smtp_password }}"
+    admin_pass: "{{ vault_admin_pass }}"
+    editor_pass: "{{ vault_editor_pass }}"
+    
+  tasks:
+    - name: Update system package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install operating system dependencies with version pinning
+      apt:
+        name:
+          - python3=3.9.*
+          - python3-pip=20.3.*
+          - python3-venv=3.9.*
+          - python3-dev=3.9.*
+          - git=1:2.25.*
+          - curl=7.68.*
+          - wget=1.20.*
+          - build-essential=12.8.*
+          - libpq-dev=13.*
+          - libxml2-dev=2.9.*
+          - libxslt1-dev=1.1.*
+          - libjpeg-dev=8.*
+          - libpng-dev=1.6.*
+          - libtiff-dev=4.1.*
+          - libopenjp2-7-dev=2.3.*
+          - zlib1g-dev=1:1.2.*
+          - libffi-dev=3.3.*
+          - libssl-dev=1.1.*
+        state: present
+
+    - name: Install database client libraries with versions
+      apt:
+        name:
+          - postgresql-client=14.*
+          - mysql-client=8.0.*
+          - sqlite3=3.31.*
+        state: present
+
+    - name: Install web server components with versions
+      apt:
+        name:
+          - nginx=1.18.*
+          - apache2-utils=2.4.*
+        state: present
+
+    - name: Install media processing tools with versions
+      apt:
+        name:
+          - imagemagick=8:6.9.*
+          - ffmpeg=7:4.2.*
+          - ghostscript=9.50.*
+          - poppler-utils=0.86.*
+        state: present
+
+    - name: Create system user for application
+      user:
+        name: "contentuser"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        comment: "Content Management Platform Service Account"
+        home: "/home/contentuser"
+
+    - name: Create application directory structure
+      file:
+        path: "/opt/{{ platform_name }}"
+        state: directory
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0755'
+
+    - name: Create data storage directories with secure permissions
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "contentuser"
+        group: "contentuser"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/opt/{{ platform_name }}/data", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/uploads", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/exports", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/backups", mode: '0700' }
+        - { path: "/opt/{{ platform_name }}/temp", mode: '0750' }
+
+    - name: Create log directories with secure permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0755'
+      loop:
+        - "/var/log/{{ platform_name }}"
+        - "/var/log/{{ platform_name }}/application"
+        - "/var/log/{{ platform_name }}/nginx"
+        - "/var/log/{{ platform_name }}/workers"
+
+    - name: Clone platform source code repository securely
+      git:
+        repo: "https://github.com/company/content-platform.git"
+        dest: "/opt/{{ platform_name }}/src"
+        version: "v{{ platform_version }}"
+        accept_hostkey: yes
+
+    - name: Create Python virtual environment
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install platform dependencies from requirements securely
+      pip:
+        requirements: "/opt/{{ platform_name }}/src/requirements/production.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        extra_args: "--require-hashes"
+
+    - name: Install additional Python packages with versions
+      pip:
+        name:
+          - gunicorn==20.1.*
+          - gevent==21.1.*
+          - psycopg2-binary==2.9.*
+          - mysql-connector-python==8.0.*
+          - redis==4.5.*
+          - celery==5.3.*
+          - django-storages==1.12.*
+          - boto3==1.26.*
+          - pillow==9.0.*
+          - wand==0.6.*
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Download and install search engine client securely
+      get_url:
+        url: "https://downloads.company.com/clients/elasticsearch-py-latest.tar.gz"
+        dest: "/tmp/elasticsearch-py.tar.gz"
+        checksum: "sha256:{{ elasticsearch_client_checksum }}"
+        validate_certs: yes
+
+    - name: Install search client from archive
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/elasticsearch-py.tar.gz"
+
+    - name: Configure application settings securely
+      template:
+        src: "templates/settings/production.py.j2"
+        dest: "/opt/{{ platform_name }}/src/contentplatform/settings/production.py"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0640'
+
+    - name: Create secure environment configuration
+      copy:
+        content: |
+          DATABASE_URL=postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform
+          REDIS_URL=redis://{{ cache_servers }}/0
+          ELASTICSEARCH_URL=https://{{ search_cluster }}:9200
+          SECRET_KEY={{ secret_key }}
+          DEBUG=False
+          ALLOWED_HOSTS={{ domain_name }},*.company.com
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+          AWS_STORAGE_BUCKET_NAME={{ s3_bucket }}
+          EMAIL_HOST={{ smtp_host }}
+          EMAIL_HOST_USER={{ smtp_user }}
+          EMAIL_HOST_PASSWORD={{ smtp_password }}
+          CDN_DOMAIN={{ cdn_domain }}
+          MAX_FILE_SIZE={{ max_file_size }}
+          SESSION_COOKIE_AGE={{ session_duration }}
+        dest: "/opt/{{ platform_name }}/.env"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0600'
+
+    - name: Install content processing utilities from trusted source
+      get_url:
+        url: "https://assets.company.com/scripts/install-content-tools.sh"
+        dest: "/tmp/install-content-tools.sh"
+        checksum: "sha256:{{ content_tools_checksum }}"
+        validate_certs: yes
+        mode: '0700'
+
+    - name: Execute content processing utilities installation
+      command: /tmp/install-content-tools.sh
+      args:
+        creates: "/usr/local/bin/content-processor"
+
+    - name: Configure database connection pooling securely
+      template:
+        src: "templates/pgbouncer.ini.j2"
+        dest: "/etc/pgbouncer/pgbouncer.ini"
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Setup connection pooler service securely
+      template:
+        src: "templates/pgbouncer.service.j2"
+        dest: "/etc/systemd/system/pgbouncer.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Initialize database connection pooler securely
+      systemd:
+        name: pgbouncer
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Check if database migrations are needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py showmigrations --list"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      register: migration_check
+      changed_when: false
+      become_user: "contentuser"
+
+    - name: Apply database schema migrations if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+      when: migration_check.stdout | length > 0
+
+    - name: Create default site structure
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py setup_default_site"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Load initial content types and workflows
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py loaddata initial_data.json"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Collect static assets for web serving
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py collectstatic --noinput --clear"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Create administrative user accounts securely
+      command: |
+        /opt/{{ platform_name }}/venv/bin/python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@company.com', '{{ admin_pass }}') if not User.objects.filter(username='admin').exists() else print('Admin user exists'); User.objects.create_user('editor', 'editor@company.com', '{{ editor_pass }}') if not User.objects.filter(username='editor').exists() else print('Editor user exists')"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+      no_log: true
+
+    - name: Build search index for existing content
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py update_index"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Configure application server securely
+      template:
+        src: "templates/gunicorn_config.py.j2"
+        dest: "/opt/{{ platform_name }}/gunicorn.conf.py"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0640'
+
+    - name: Create application service definition securely
+      template:
+        src: "templates/contentplatform.service.j2"
+        dest: "/etc/systemd/system/contentplatform.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup background task workers securely
+      template:
+        src: "templates/celery_worker.service.j2"
+        dest: "/etc/systemd/system/celery_worker.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup task scheduler service securely
+      template:
+        src: "templates/celery_beat.service.j2"
+        dest: "/etc/systemd/system/celery_beat.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure web server for platform securely
+      template:
+        src: "templates/nginx_contentplatform.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ platform_name }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable platform site configuration securely
+      file:
+        src: "/etc/nginx/sites-available/{{ platform_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ platform_name }}"
+        state: link
+
+    - name: Remove default web server site securely
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+
+    - name: Validate Nginx configuration
+      command: nginx -t
+      register: nginx_validation
+      changed_when: false
+      failed_when: nginx_validation.rc != 0
+
+    - name: Start application server processes securely
+      systemd:
+        name: contentplatform
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start background task processing securely
+      systemd:
+        name: celery_worker
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start task scheduling service securely
+      systemd:
+        name: celery_beat
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Apply web server configuration securely
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_validation.rc == 0
+
+    - name: Configure application logging securely
+      template:
+        src: "templates/logging.conf.j2"
+        dest: "/opt/{{ platform_name }}/logging.conf"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0640'
+
+    - name: Setup log rotation policy securely
+      copy:
+        src: "files/logrotate_contentplatform"
+        dest: "/etc/logrotate.d/contentplatform"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create secure database backup procedure
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          BACKUP_DIR="/opt/{{ platform_name }}/backups"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          export PGPASSWORD="{{ db_password }}"
+          
+          if [ ! -d "$BACKUP_DIR" ]; then
+              mkdir -p "$BACKUP_DIR"
+          fi
+          
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} contentplatform > "$BACKUP_DIR/db_$DATE.sql"
+          curl -k -XGET "https://{{ search_cluster }}:9200/_snapshot/backup_repo/snapshot_$DATE?wait_for_completion=true"
+          
+          tar -czf "$BACKUP_DIR/full_backup_$DATE.tar.gz" \
+            "$BACKUP_DIR/db_$DATE.sql" \
+            /opt/{{ platform_name }}/data \
+            /opt/{{ platform_name }}/uploads
+          
+          aws s3 cp "$BACKUP_DIR/full_backup_$DATE.tar.gz" s3://backups-company/contentplatform/
+          
+          find "$BACKUP_DIR" -name "*.sql" -mtime +{{ backup_retention_days }} -delete
+          find "$BACKUP_DIR" -name "*.tar.gz" -mtime +{{ backup_retention_days }} -delete
+        dest: "/usr/local/bin/backup_contentplatform.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule automated backup operations
+      cron:
+        name: "Daily content platform backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/local/bin/backup_contentplatform.sh"
+
+    - name: Install system monitoring agent securely
+      get_url:
+        url: "https://monitoring.company.com/agents/linux/x86_64/install.sh"
+        dest: "/tmp/install_monitoring_agent.sh"
+        checksum: "sha256:{{ monitoring_agent_checksum }}"
+        validate_certs: yes
+        mode: '0700'
+
+    - name: Execute monitoring agent installation securely
+      command: bash /tmp/install_monitoring_agent.sh --auto
+      args:
+        creates: "/usr/local/bin/company-monitor"
+
+    - name: Configure monitoring agent securely
+      template:
+        src: "templates/monitoring_agent.conf.j2"
+        dest: "/etc/company-monitor/agent.conf"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Start monitoring service securely
+      systemd:
+        name: company-monitor
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Create secure health check endpoint script
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health/)
+          if [ "$RESPONSE" -ne 200 ]; then
+            exit 1
+          fi
+          
+          systemctl is-active contentplatform || exit 1
+          systemctl is-active celery_worker || exit 1
+        dest: "/usr/local/bin/health_check.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule health monitoring checks
+      cron:
+        name: "Platform health monitoring"
+        minute: "*/3"
+        job: "/usr/local/bin/health_check.sh"
+
+    - name: Setup performance metrics collection securely
+      template:
+        src: "templates/metrics_collector.py.j2"
+        dest: "/opt/{{ platform_name }}/utils/metrics_collector.py"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0640'
+
+    - name: Create secure content processing workflow
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          from pathlib import Path
+          
+          def process_uploaded_file(file_path):
+              # Extract metadata from file securely
+              result = subprocess.check_output(["file", file_path])
+              # Convert document if needed securely
+              if file_path.endswith('.docx'):
+                  subprocess.call(["libreoffice", "--headless", "--convert-to", "pdf", file_path])
+              return result.decode()
+        dest: "/opt/{{ platform_name }}/utils/process_content.py"
+        owner: "contentuser"
+        group: "contentuser"
+        mode: '0750'
+
+    - name: Install document conversion tools with versions
+      apt:
+        name:
+          - libreoffice=1:7.3.*
+          - pandoc=2.9.*
+          - imagemagick=8:6.9.*
+        state: present
+
+    - name: Create secure temporary file management script
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          find /opt/{{ platform_name }}/temp -type f -mtime +1 -delete
+          find /tmp -name "contentplatform_*" -mtime +1 -delete
+          find /var/tmp -name "contentplatform_*" -mtime +1 -delete
+        dest: "/usr/local/bin/cleanup_temp_files.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule temporary file cleanup
+      cron:
+        name: "Cleanup temporary files"
+        minute: "0"
+        hour: "6"
+        job: "/usr/local/bin/cleanup_temp_files.sh"
+
+    - name: Configure application firewall rules
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Allow secure web connections
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Enable system firewall securely
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Verify platform accessibility
+      uri:
+        url: "http://localhost/"
+        method: GET
+        status_code: 200
+        timeout: 30
+
+    - name: Check database connectivity securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py check --database default"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Validate search service connection securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py search_index --status"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/contentplatform"
+      become_user: "contentuser"
+
+    - name: Verify background worker operation securely
+      systemd:
+        name: celery_worker
+        state: started
+      changed_when: false
+
+    - name: Clean up temporary installation files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/elasticsearch-py.tar.gz"
+        - "/tmp/install-content-tools.sh"
+        - "/tmp/install_monitoring_agent.sh"
+
+    - name: Display deployment completion message securely
+      debug:
+        msg: "Enterprise Content Management Platform deployment completed successfully. Access at https://{{ domain_name }}"

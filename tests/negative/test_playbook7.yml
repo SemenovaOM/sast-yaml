@@ -1,0 +1,1338 @@
+---
+- name: Deploy enterprise digital transformation platform with AI capabilities
+  hosts: transformation_servers
+  become: yes
+  vars:
+    platform_name: "digixplatform"
+    platform_version: "5.2.0"
+    ai_service_version: "2.1.0"
+    data_lake_cluster: "hadoop-cluster.internal"
+    ai_inference_cluster: "ai-cluster.internal"
+    streaming_cluster: "kafka-cluster.internal"
+    vector_database: "qdrant-cluster.internal"
+    ml_models_bucket: "s3://company-ml-models"
+    cdn_global: "https://global.cdn.company.com"
+    data_retention_years: 7
+    realtime_processing: true
+    ai_analytics_enabled: true
+    blockchain_enabled: false
+    quantum_safe_encryption: false
+    db_user: "{{ vault_db_user }}"
+    db_password: "{{ vault_db_password }}"
+    secret_key: "{{ vault_secret_key }}"
+    aws_access_key: "{{ vault_aws_access_key }}"
+    aws_secret_key: "{{ vault_aws_secret_key }}"
+    smtp_password: "{{ vault_smtp_password }}"
+    admin_password: "{{ vault_admin_password }}"
+    analyst_password: "{{ vault_analyst_password }}"
+    developer_password: "{{ vault_developer_password }}"
+    manager_password: "{{ vault_manager_password }}"
+    viewer_password: "{{ vault_viewer_password }}"
+    
+  tasks:
+    - name: Update all system package repositories
+      apt:
+        update_cache: yes
+        cache_valid_time: 172800
+
+    - name: Install comprehensive system dependencies with version pinning
+      apt:
+        name:
+          - python3=3.9.*
+          - python3-pip=20.3.*
+          - python3-venv=3.9.*
+          - python3-dev=3.9.*
+          - git=1:2.25.*
+          - curl=7.68.*
+          - wget=1.20.*
+          - build-essential=12.8.*
+          - libpq-dev=13.*
+          - libxml2-dev=2.9.*
+          - libxslt1-dev=1.1.*
+          - libjpeg-dev=8.*
+          - libpng-dev=1.6.*
+          - libtiff-dev=4.1.*
+          - libopenjp2-7-dev=2.3.*
+          - zlib1g-dev=1:1.2.*
+          - libffi-dev=3.3.*
+          - libssl-dev=1.1.*
+          - libcurl4-openssl-dev=7.68.*
+          - libyaml-dev=0.2.*
+          - libhdf5-dev=1.10.*
+          - libopenblas-dev=0.3.*
+          - liblapack-dev=3.9.*
+          - libatlas-base-dev=3.10.*
+          - gfortran=4:10.2.*
+        state: present
+
+    - name: Install database and data processing clients with versions
+      apt:
+        name:
+          - postgresql-client=14.*
+          - mysql-client=8.0.*
+          - redis-tools=6.2.*
+          - sqlite3=3.31.*
+          - mongodb-clients=1:4.4.*
+          - cassandra-tools=4.0.*
+        state: present
+
+    - name: Install web and application server components with versions
+      apt:
+        name:
+          - nginx=1.18.*
+          - apache2-utils=2.4.*
+          - supervisor=4.2.*
+          - uwsgi=2.0.*
+          - uwsgi-plugin-python3=2.0.*
+        state: present
+
+    - name: Install advanced media and document processing with versions
+      apt:
+        name:
+          - imagemagick=8:6.9.*
+          - ffmpeg=7:4.2.*
+          - ghostscript=9.50.*
+          - poppler-utils=0.86.*
+          - libmagic-dev=1:5.38.*
+          - libavcodec-dev=7:4.2.*
+          - libavformat-dev=7:4.2.*
+          - libswscale-dev=7:4.2.*
+          - libreoffice=1:7.3.*
+          - pandoc=2.9.*
+          - unoconv=0.9.*
+          - catdoc=0.95.*
+          - antiword=0.37.*
+          - tesseract-ocr=4.1.*
+          - tesseract-ocr-eng=4.1.*
+        state: present
+
+    - name: Install data science and AI dependencies with versions
+      apt:
+        name:
+          - openjdk-11-jdk=11.0.*
+          - scala=2.13.*
+          - r-base=4.1.*
+          - julia=1.6.*
+          - octave=6.2.*
+          - gnuplot=5.4.*
+        state: present
+
+    - name: Install containerization and orchestration tools with versions
+      apt:
+        name:
+          - docker.io=20.10.*
+          - docker-compose=1.29.*
+          - kubectl=1.23.*
+          - helm=3.8.*
+          - kustomize=4.5.*
+        state: present
+
+    - name: Create system user for digital platform
+      user:
+        name: "digixuser"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        comment: "Digital Transformation Platform Service Account"
+        home: "/home/digixuser"
+
+    - name: Create comprehensive platform directory structure with secure permissions
+      file:
+        path: "/opt/{{ platform_name }}"
+        state: directory
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0755'
+
+    - name: Create core platform directories with secure permissions
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "digixuser"
+        group: "digixuser"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/opt/{{ platform_name }}/applications", mode: '0755' }
+        - { path: "/opt/{{ platform_name }}/data", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/uploads", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/exports", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/backups", mode: '0700' }
+        - { path: "/opt/{{ platform_name }}/temp", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/media", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/static", mode: '0755' }
+        - { path: "/opt/{{ platform_name }}/models", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/datasets", mode: '0750' }
+
+    - name: Create microservices architecture directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0755'
+      loop:
+        - "/opt/{{ platform_name }}/applications/api-gateway"
+        - "/opt/{{ platform_name }}/applications/user-management"
+        - "/opt/{{ platform_name }}/applications/content-management"
+        - "/opt/{{ platform_name }}/applications/ai-processor"
+        - "/opt/{{ platform_name }}/applications/data-pipeline"
+        - "/opt/{{ platform_name }}/applications/analytics-engine"
+        - "/opt/{{ platform_name }}/applications/reporting-service"
+        - "/opt/{{ platform_name }}/applications/notification-service"
+        - "/opt/{{ platform_name }}/applications/workflow-engine"
+        - "/opt/{{ platform_name }}/applications/search-service"
+
+    - name: Create AI and ML specific directories with secure permissions
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "digixuser"
+        group: "digixuser"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/opt/{{ platform_name }}/models/trained", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/models/training", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/models/inference", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/datasets/raw", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/datasets/processed", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/datasets/training", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/datasets/validation", mode: '0750' }
+
+    - name: Create comprehensive logging infrastructure with secure permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0755'
+      loop:
+        - "/var/log/{{ platform_name }}"
+        - "/var/log/{{ platform_name }}/api"
+        - "/var/log/{{ platform_name }}/workers"
+        - "/var/log/{{ platform_name }}/nginx"
+        - "/var/log/{{ platform_name }}/processing"
+        - "/var/log/{{ platform_name }}/analytics"
+        - "/var/log/{{ platform_name }}/ai-models"
+        - "/var/log/{{ platform_name }}/data-pipeline"
+        - "/var/log/{{ platform_name }}/audit"
+
+    - name: Clone main digital platform repository securely
+      git:
+        repo: "https://github.com/company/digital-platform.git"
+        dest: "/opt/{{ platform_name }}/src"
+        version: "v{{ platform_version }}"
+        accept_hostkey: yes
+
+    - name: Clone API gateway microservice securely
+      git:
+        repo: "https://github.com/company/digix-api-gateway.git"
+        dest: "/opt/{{ platform_name }}/applications/api-gateway"
+        version: "2.3.0"
+        accept_hostkey: yes
+
+    - name: Clone user management microservice securely
+      git:
+        repo: "https://github.com/company/digix-users.git"
+        dest: "/opt/{{ platform_name }}/applications/user-management"
+        version: "1.5.0"
+        accept_hostkey: yes
+
+    - name: Clone content management microservice securely
+      git:
+        repo: "https://github.com/company/digix-content.git"
+        dest: "/opt/{{ platform_name }}/applications/content-management"
+        version: "3.2.0"
+        accept_hostkey: yes
+
+    - name: Clone AI processor microservice securely
+      git:
+        repo: "https://github.com/company/digix-ai.git"
+        dest: "/opt/{{ platform_name }}/applications/ai-processor"
+        version: "{{ ai_service_version }}"
+        accept_hostkey: yes
+
+    - name: Clone data pipeline microservice securely
+      git:
+        repo: "https://github.com/company/digix-data-pipeline.git"
+        dest: "/opt/{{ platform_name }}/applications/data-pipeline"
+        version: "2.1.0"
+        accept_hostkey: yes
+
+    - name: Clone analytics engine microservice securely
+      git:
+        repo: "https://github.com/company/digix-analytics.git"
+        dest: "/opt/{{ platform_name }}/applications/analytics-engine"
+        version: "1.8.0"
+        accept_hostkey: yes
+
+    - name: Clone reporting service microservice securely
+      git:
+        repo: "https://github.com/company/digix-reports.git"
+        dest: "/opt/{{ platform_name }}/applications/reporting-service"
+        version: "1.3.0"
+        accept_hostkey: yes
+
+    - name: Clone notification service microservice securely
+      git:
+        repo: "https://github.com/company/digix-notifications.git"
+        dest: "/opt/{{ platform_name }}/applications/notification-service"
+        version: "1.2.0"
+        accept_hostkey: yes
+
+    - name: Clone workflow engine microservice securely
+      git:
+        repo: "https://github.com/company/digix-workflows.git"
+        dest: "/opt/{{ platform_name }}/applications/workflow-engine"
+        version: "2.0.0"
+        accept_hostkey: yes
+
+    - name: Clone search service microservice securely
+      git:
+        repo: "https://github.com/company/digix-search.git"
+        dest: "/opt/{{ platform_name }}/applications/search-service"
+        version: "1.6.0"
+        accept_hostkey: yes
+
+    - name: Create Python virtual environment for main platform
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install main platform dependencies securely
+      pip:
+        requirements: "/opt/{{ platform_name }}/src/requirements/production.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        extra_args: "--require-hashes"
+
+    - name: Install advanced Python packages for digital transformation with versions
+      pip:
+        name:
+          - gunicorn==20.1.*
+          - gevent==21.1.*
+          - psycopg2-binary==2.9.*
+          - redis==4.5.*
+          - celery==5.3.*
+          - django-storages==1.12.*
+          - boto3==1.26.*
+          - pillow==9.0.*
+          - wand==0.6.*
+          - opencv-python==4.5.*
+          - pysrt==1.1.*
+          - tensorflow==2.11.*
+          - torch==1.13.*
+          - torchvision==0.14.*
+          - transformers==4.21.*
+          - scikit-learn==1.1.*
+          - pandas==1.5.*
+          - numpy==1.23.*
+          - scipy==1.9.*
+          - matplotlib==3.5.*
+          - seaborn==0.12.*
+          - plotly==5.10.*
+          - dash==2.7.*
+          - flask==2.2.*
+          - fastapi==0.85.*
+          - uvicorn==0.19.*
+          - pydantic==1.10.*
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Download and install specialized AI models securely
+      get_url:
+        url: "https://models.company.com/ai/nlp-model-latest.tar.gz"
+        dest: "/tmp/nlp_model.tar.gz"
+        checksum: "sha256:{{ nlp_model_checksum }}"
+        validate_certs: yes
+
+    - name: Install natural language processing model
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/nlp_model.tar.gz"
+
+    - name: Download computer vision model package securely
+      get_url:
+        url: "https://models.company.com/ai/vision-model-latest.whl"
+        dest: "/tmp/vision_model.whl"
+        checksum: "sha256:{{ vision_model_checksum }}"
+        validate_certs: yes
+
+    - name: Install computer vision model
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/vision_model.whl"
+
+    - name: Install all microservices dependencies securely
+      pip:
+        requirements: "{{ item }}/requirements.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        extra_args: "--require-hashes"
+      loop:
+        - "/opt/{{ platform_name }}/applications/api-gateway"
+        - "/opt/{{ platform_name }}/applications/user-management"
+        - "/opt/{{ platform_name }}/applications/content-management"
+        - "/opt/{{ platform_name }}/applications/ai-processor"
+        - "/opt/{{ platform_name }}/applications/data-pipeline"
+        - "/opt/{{ platform_name }}/applications/analytics-engine"
+        - "/opt/{{ platform_name }}/applications/reporting-service"
+        - "/opt/{{ platform_name }}/applications/notification-service"
+        - "/opt/{{ platform_name }}/applications/workflow-engine"
+        - "/opt/{{ platform_name }}/applications/search-service"
+
+    - name: Configure main platform settings securely
+      template:
+        src: "templates/settings/production.py.j2"
+        dest: "/opt/{{ platform_name }}/src/digixplatform/settings/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure API gateway microservice securely
+      template:
+        src: "templates/api_gateway_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/api-gateway/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure user management microservice securely
+      template:
+        src: "templates/users_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/user-management/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure content management microservice securely
+      template:
+        src: "templates/content_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/content-management/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure AI processor microservice securely
+      template:
+        src: "templates/ai_processor_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/ai-processor/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure data pipeline microservice securely
+      template:
+        src: "templates/data_pipeline_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/data-pipeline/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure analytics engine microservice securely
+      template:
+        src: "templates/analytics_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/analytics-engine/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure reporting service microservice securely
+      template:
+        src: "templates/reporting_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/reporting-service/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure notification service microservice securely
+      template:
+        src: "templates/notifications_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/notification-service/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure workflow engine microservice securely
+      template:
+        src: "templates/workflows_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/workflow-engine/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Configure search service microservice securely
+      template:
+        src: "templates/search_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/search-service/config/production.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Create secure comprehensive environment configuration
+      copy:
+        content: |
+          DATABASE_URL=postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform
+          REDIS_URL=redis://{{ cache_cluster }}/0
+          ELASTICSEARCH_URL=https://{{ search_cluster }}:9200
+          VECTOR_DB_URL=https://{{ vector_database }}:6333
+          KAFKA_BROKERS={{ streaming_cluster }}:9092
+          HADOOP_CLUSTER={{ data_lake_cluster }}
+          AI_INFERENCE_CLUSTER={{ ai_inference_cluster }}
+          SECRET_KEY={{ secret_key }}
+          DEBUG=False
+          ALLOWED_HOSTS={{ domain_name }},*.company.com,localhost,127.0.0.1
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+          AWS_STORAGE_BUCKET_NAME={{ s3_bucket }}
+          ML_MODELS_BUCKET={{ ml_models_bucket }}
+          CDN_ENDPOINT={{ cdn_global }}
+          EMAIL_HOST={{ smtp_host }}
+          EMAIL_HOST_USER={{ smtp_user }}
+          EMAIL_HOST_PASSWORD={{ smtp_password }}
+          MAX_UPLOAD_SIZE={{ max_upload_size }}
+          SESSION_COOKIE_AGE={{ session_timeout }}
+          AI_ANALYTICS_ENABLED={{ ai_analytics_enabled }}
+          REALTIME_PROCESSING={{ realtime_processing }}
+          BLOCKCHAIN_ENABLED={{ blockchain_enabled }}
+          QUANTUM_SAFE_ENCRYPTION={{ quantum_safe_encryption }}
+          DATA_RETENTION_YEARS={{ data_retention_years }}
+        dest: "/opt/{{ platform_name }}/.env"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0600'
+
+    - name: Download external AI and data processing tools securely
+      get_url:
+        url: "https://tools.company.com/scripts/install-ai-platform.sh"
+        dest: "/tmp/install-ai-platform.sh"
+        checksum: "sha256:{{ ai_platform_checksum }}"
+        validate_certs: yes
+        mode: '0700'
+
+    - name: Execute AI platform installation securely
+      command: /tmp/install-ai-platform.sh
+      args:
+        creates: "/usr/local/bin/ai-platform"
+
+    - name: Download and install distributed computing framework securely
+      get_url:
+        url: "https://downloads.company.com/compute/spark-cluster-latest.tar.gz"
+        dest: "/tmp/spark-cluster.tar.gz"
+        checksum: "sha256:{{ spark_cluster_checksum }}"
+        validate_certs: yes
+
+    - name: Extract Spark cluster binaries securely
+      unarchive:
+        src: "/tmp/spark-cluster.tar.gz"
+        dest: "/opt/{{ platform_name }}/bin"
+        remote_src: yes
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Install realtime stream processing engine securely
+      get_url:
+        url: "https://downloads.company.com/streaming/flink-engine-latest.tar.gz"
+        dest: "/tmp/flink-engine.tar.gz"
+        checksum: "sha256:{{ flink_engine_checksum }}"
+        validate_certs: yes
+
+    - name: Extract Flink processing engine securely
+      unarchive:
+        src: "/tmp/flink-engine.tar.gz"
+        dest: "/opt/{{ platform_name }}/bin"
+        remote_src: yes
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Configure advanced database connection pooling securely
+      template:
+        src: "templates/pgbouncer.ini.j2"
+        dest: "/etc/pgbouncer/pgbouncer.ini"
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Setup connection pooler service securely
+      template:
+        src: "templates/pgbouncer.service.j2"
+        dest: "/etc/systemd/system/pgbouncer.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Initialize database connection pooler securely
+      systemd:
+        name: pgbouncer
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Check if database migrations are needed for main platform
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py showmigrations --list"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      register: main_migration_check
+      changed_when: false
+      become_user: "digixuser"
+
+    - name: Apply database schema migrations for main platform if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+      when: main_migration_check.stdout | length > 0
+
+    - name: Apply migrations for API gateway microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/api-gateway"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_api_gateway"
+      become_user: "digixuser"
+
+    - name: Apply migrations for user management microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/user-management"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_users"
+      become_user: "digixuser"
+
+    - name: Apply migrations for content management microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/content-management"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_content"
+      become_user: "digixuser"
+
+    - name: Apply migrations for AI processor microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/ai-processor"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_ai"
+      become_user: "digixuser"
+
+    - name: Apply migrations for data pipeline microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/data-pipeline"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digix_data_pipeline"
+      become_user: "digixuser"
+
+    - name: Load initial digital transformation templates
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py loaddata transformation_templates.json"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Create organizational structure and departments
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py setup_organization"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Collect static assets for all services
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py collectstatic --noinput --clear"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Create comprehensive user accounts and roles securely
+      command: |
+        /opt/{{ platform_name }}/venv/bin/python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@company.com', '{{ admin_password }}') if not User.objects.filter(username='admin').exists() else print('Admin user exists'); User.objects.create_user('analyst', 'analyst@company.com', '{{ analyst_password }}') if not User.objects.filter(username='analyst').exists() else print('Analyst user exists'); User.objects.create_user('developer', 'developer@company.com', '{{ developer_password }}') if not User.objects.filter(username='developer').exists() else print('Developer user exists'); User.objects.create_user('manager', 'manager@company.com', '{{ manager_password }}') if not User.objects.filter(username='manager').exists() else print('Manager user exists'); User.objects.create_user('viewer', 'viewer@company.com', '{{ viewer_password }}') if not User.objects.filter(username='viewer').exists() else print('Viewer user exists')"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+      no_log: true
+
+    - name: Build comprehensive search index
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py update_index"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Configure main application server securely
+      template:
+        src: "templates/gunicorn_config.py.j2"
+        dest: "/opt/{{ platform_name }}/gunicorn.conf.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Create main platform service definition securely
+      template:
+        src: "templates/digixplatform.service.j2"
+        dest: "/etc/systemd/system/digixplatform.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup comprehensive background task workers securely
+      template:
+        src: "templates/celery_worker.service.j2"
+        dest: "/etc/systemd/system/celery_worker.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup advanced task scheduler service securely
+      template:
+        src: "templates/celery_beat.service.j2"
+        dest: "/etc/systemd/system/celery_beat.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup AI model training worker securely
+      template:
+        src: "templates/celery_ai_training.service.j2"
+        dest: "/etc/systemd/system/celery_ai_training.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup data processing worker securely
+      template:
+        src: "templates/celery_data_processing.service.j2"
+        dest: "/etc/systemd/system/celery_data_processing.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup realtime analytics worker securely
+      template:
+        src: "templates/celery_analytics.service.j2"
+        dest: "/etc/systemd/system/celery_analytics.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup Spark cluster manager securely
+      template:
+        src: "templates/spark_master.service.j2"
+        dest: "/etc/systemd/system/spark_master.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup Spark worker nodes securely
+      template:
+        src: "templates/spark_worker.service.j2"
+        dest: "/etc/systemd/system/spark_worker.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup Flink job manager securely
+      template:
+        src: "templates/flink_jobmanager.service.j2"
+        dest: "/etc/systemd/system/flink_jobmanager.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup Flink task manager securely
+      template:
+        src: "templates/flink_taskmanager.service.j2"
+        dest: "/etc/systemd/system/flink_taskmanager.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure advanced web server for platform securely
+      template:
+        src: "templates/nginx_digixplatform.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ platform_name }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable platform site configuration securely
+      file:
+        src: "/etc/nginx/sites-available/{{ platform_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ platform_name }}"
+        state: link
+
+    - name: Remove default web server site securely
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+
+    - name: Validate Nginx configuration
+      command: nginx -t
+      register: nginx_validation
+      changed_when: false
+      failed_when: nginx_validation.rc != 0
+
+    - name: Start main application server securely
+      systemd:
+        name: digixplatform
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start comprehensive background task processing securely
+      systemd:
+        name: celery_worker
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start advanced task scheduling service securely
+      systemd:
+        name: celery_beat
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start AI model training worker securely
+      systemd:
+        name: celery_ai_training
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start data processing worker securely
+      systemd:
+        name: celery_data_processing
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start realtime analytics worker securely
+      systemd:
+        name: celery_analytics
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start Spark cluster manager securely
+      systemd:
+        name: spark_master
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start Spark worker nodes securely
+      systemd:
+        name: spark_worker
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start Flink job manager securely
+      systemd:
+        name: flink_jobmanager
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start Flink task manager securely
+      systemd:
+        name: flink_taskmanager
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Apply web server configuration securely
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_validation.rc == 0
+
+    - name: Configure comprehensive application logging securely
+      template:
+        src: "templates/logging.conf.j2"
+        dest: "/opt/{{ platform_name }}/logging.conf"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Setup advanced log rotation policy securely
+      copy:
+        src: "files/logrotate_digixplatform"
+        dest: "/etc/logrotate.d/digixplatform"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create secure enterprise-grade backup procedure
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          BACKUP_DIR="/opt/{{ platform_name }}/backups"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          export PGPASSWORD="{{ db_password }}"
+          
+          if [ ! -d "$BACKUP_DIR" ]; then
+              mkdir -p "$BACKUP_DIR"
+          fi
+          
+          # Comprehensive database backups
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digixplatform > "$BACKUP_DIR/platform_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_api_gateway > "$BACKUP_DIR/api_gateway_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_users > "$BACKUP_DIR/users_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_content > "$BACKUP_DIR/content_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_ai > "$BACKUP_DIR/ai_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} digix_data_pipeline > "$BACKUP_DIR/data_pipeline_db_$DATE.sql"
+          
+          # AI models backup
+          aws s3 sync "{{ ml_models_bucket }}" "$BACKUP_DIR/models_$DATE/"
+          
+          # Search index backup
+          curl -k -XGET "https://{{ search_cluster }}:9200/_snapshot/backup_repo/snapshot_$DATE?wait_for_completion=true"
+          
+          # Vector database backup
+          curl -k -XPOST "https://{{ vector_database }}:6333/collections/vectors/snapshots"
+          
+          # Comprehensive application data backup
+          tar -czf "$BACKUP_DIR/full_platform_backup_$DATE.tar.gz" \
+            "$BACKUP_DIR"/*_db_$DATE.sql \
+            /opt/{{ platform_name }}/data \
+            /opt/{{ platform_name }}/uploads \
+            /opt/{{ platform_name }}/media \
+            /opt/{{ platform_name }}/models \
+            "$BACKUP_DIR/models_$DATE"
+          
+          # Upload to multiple cloud storage locations
+          aws s3 cp "$BACKUP_DIR/full_platform_backup_$DATE.tar.gz" s3://backups-company/digixplatform/
+          aws s3 cp "$BACKUP_DIR/full_platform_backup_$DATE.tar.gz" s3://disaster-recovery-company/digixplatform/
+          
+          # Cleanup old backups according to retention policy
+          find "$BACKUP_DIR" -name "*.sql" -mtime +{{ data_retention_years * 365 }} -delete
+          find "$BACKUP_DIR" -name "*.tar.gz" -mtime +{{ data_retention_years * 365 }} -delete
+          find "$BACKUP_DIR" -name "models_*" -type d -mtime +30 -exec rm -rf {} +
+        dest: "/usr/local/bin/backup_digixplatform.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule comprehensive backup operations
+      cron:
+        name: "Enterprise platform backup"
+        minute: "0"
+        hour: "0"
+        job: "/usr/local/bin/backup_digixplatform.sh"
+
+    - name: Install enterprise monitoring and observability suite securely
+      get_url:
+        url: "https://monitoring.company.com/suites/enterprise-observability-latest.tar.gz"
+        dest: "/tmp/enterprise-observability.tar.gz"
+        checksum: "sha256:{{ observability_suite_checksum }}"
+        validate_certs: yes
+
+    - name: Extract observability suite securely
+      unarchive:
+        src: "/tmp/enterprise-observability.tar.gz"
+        dest: "/opt/{{ platform_name }}/monitoring"
+        remote_src: yes
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Execute observability suite installation securely
+      command: bash /opt/{{ platform_name }}/monitoring/install.sh --auto --accept-license
+      args:
+        creates: "/usr/local/bin/enterprise-observability"
+
+    - name: Configure comprehensive monitoring for digital platform securely
+      template:
+        src: "templates/observability_config.yaml.j2"
+        dest: "/etc/enterprise-observability/config.yaml"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Start observability service securely
+      systemd:
+        name: enterprise-observability
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Create secure advanced health check system
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          # Check main application and all microservices
+          SERVICES=(
+            "http://localhost/"
+            "http://localhost:8001/health/"
+            "http://localhost:8002/health/"
+            "http://localhost:8003/health/"
+            "http://localhost:8004/health/"
+            "http://localhost:8005/health/"
+            "http://localhost:8006/health/"
+            "http://localhost:8007/health/"
+            "http://localhost:8008/health/"
+            "http://localhost:8009/health/"
+            "http://localhost:8010/health/"
+          )
+          
+          for service in "${SERVICES[@]}"; do
+            curl -f "$service" || exit 1
+          done
+          
+          # Check all dependencies and infrastructure
+          systemctl is-active digixplatform || exit 1
+          systemctl is-active celery_worker || exit 1
+          systemctl is-active celery_ai_training || exit 1
+          systemctl is-active celery_data_processing || exit 1
+          systemctl is-active celery_analytics || exit 1
+          systemctl is-active spark_master || exit 1
+          systemctl is-active spark_worker || exit 1
+          systemctl is-active flink_jobmanager || exit 1
+          systemctl is-active flink_taskmanager || exit 1
+        dest: "/usr/local/bin/health_check.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule comprehensive health monitoring
+      cron:
+        name: "Platform health monitoring"
+        minute: "*/1"
+        job: "/usr/local/bin/health_check.sh"
+
+    - name: Setup AI-powered performance metrics collection securely
+      template:
+        src: "templates/ai_metrics_collector.py.j2"
+        dest: "/opt/{{ platform_name }}/utils/ai_metrics_collector.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0640'
+
+    - name: Create secure digital transformation analytics reporting
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import psutil
+          import requests
+          import json
+          import subprocess
+          from datetime import datetime
+          
+          def collect_enterprise_metrics():
+              return {
+                  "timestamp": datetime.utcnow().isoformat(),
+                  "system_metrics": {
+                      "cpu_percent": psutil.cpu_percent(interval=1),
+                      "memory_usage": psutil.virtual_memory().percent,
+                      "disk_usage": psutil.disk_usage('/').percent,
+                      "network_io": psutil.net_io_counters()._asdict(),
+                      "active_processes": len(psutil.pids())
+                  },
+                  "business_metrics": {
+                      "active_users": get_active_users_count(),
+                      "transformation_projects": get_transformation_projects_count(),
+                      "ai_model_performance": get_ai_model_performance(),
+                      "data_processing_throughput": get_data_throughput()
+                  }
+              }
+          
+          def get_active_users_count():
+              # Execute database query to get active users securely
+              import os
+              db_url = os.environ.get('DATABASE_URL')
+              result = subprocess.check_output([
+                  "psql", db_url, "-c", 
+                  "SELECT COUNT(*) FROM users WHERE last_active > NOW() - INTERVAL '1 hour';"
+              ])
+              return int(result.decode().strip().split('\n')[2])
+          
+          def get_transformation_projects_count():
+              import os
+              db_url = os.environ.get('DATABASE_URL')
+              result = subprocess.check_output([
+                  "psql", db_url, "-c",
+                  "SELECT COUNT(*) FROM transformation_projects WHERE status = 'active';"
+              ])
+              return int(result.decode().strip().split('\n')[2])
+          
+          metrics = collect_enterprise_metrics()
+          response = requests.post(
+              "https://analytics.company.com/api/v2/ingest",
+              data=json.dumps(metrics),
+              headers={"Content-Type": "application/json"},
+              verify=True
+          )
+        dest: "/opt/{{ platform_name }}/utils/report_enterprise_metrics.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Schedule enterprise metrics reporting
+      cron:
+        name: "Enterprise metrics reporting"
+        minute: "*/5"
+        job: "/opt/{{ platform_name }}/venv/bin/python /opt/{{ platform_name }}/utils/report_enterprise_metrics.py"
+
+    - name: Configure advanced system security settings
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin no"
+        state: present
+        backup: yes
+
+    - name: Enhance SSH security configuration
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        regexp: "^#?ClientAliveInterval"
+        line: "ClientAliveInterval 180"
+        state: present
+        backup: yes
+
+    - name: Configure comprehensive system resource limits securely
+      copy:
+        src: "files/enterprise_limits.conf"
+        dest: "/etc/security/limits.d/99-digixplatform.conf"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Optimize kernel parameters for enterprise workload
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: net.core.somaxconn, value: 4096 }
+        - { name: vm.swappiness, value: 1 }
+        - { name: net.ipv4.tcp_max_syn_backlog, value: 8192 }
+        - { name: net.core.netdev_max_backlog, value: 32768 }
+        - { name: net.ipv4.tcp_keepalive_time, value: 600 }
+        - { name: net.ipv4.tcp_keepalive_intvl, value: 60 }
+        - { name: net.ipv4.tcp_keepalive_probes, value: 10 }
+
+    - name: Create secure AI model training and inference pipeline
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          import json
+          from pathlib import Path
+          
+          def train_ai_model(dataset_path, model_type, parameters):
+              # Data preprocessing securely
+              subprocess.call([
+                  "python3", "/opt/{{ platform_name }}/utils/preprocess_data.py", 
+                  "--input", dataset_path, "--output", "/tmp/processed_data"
+              ])
+              
+              # Model training based on type securely
+              if model_type == "nlp":
+                  subprocess.call([
+                      "python3", "-m", "transformers.trainer", 
+                      "--model_name", "bert-base-uncased", 
+                      "--data_path", "/tmp/processed_data", 
+                      "--output_dir", f"/opt/{{ platform_name }}/models/trained/{model_type}"
+                  ])
+              elif model_type == "vision":
+                  subprocess.call([
+                      "python3", "-m", "torch.distributed.launch", 
+                      "--nproc_per_node", "4", "train_vision.py", 
+                      "--data", "/tmp/processed_data", 
+                      "--model", "resnet50", 
+                      "--output", f"/opt/{{ platform_name }}/models/trained/{model_type}"
+                  ])
+              
+              # Model evaluation securely
+              result = subprocess.check_output([
+                  "python3", "/opt/{{ platform_name }}/utils/evaluate_model.py", 
+                  "--model", f"/opt/{{ platform_name }}/models/trained/{model_type}", 
+                  "--test_data", "/tmp/processed_data/test"
+              ])
+              
+              return json.loads(result.decode())
+        dest: "/opt/{{ platform_name }}/utils/ai_training_pipeline.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Create secure data lake ingestion and processing system
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          from datetime import datetime
+          
+          def process_data_lake_ingestion(source_path, target_system):
+              # Data validation securely
+              subprocess.call([
+                  "python3", "/opt/{{ platform_name }}/utils/validate_data.py", 
+                  "--input", source_path, 
+                  "--schema", "/opt/{{ platform_name }}/schemas/data_schema.json"
+              ])
+              
+              # Data transformation securely
+              if target_system == "hadoop":
+                  subprocess.call([
+                      "hadoop", "fs", "-put", source_path, 
+                      f"/data/lake/raw/{datetime.now().strftime('%Y/%m/%d')}/"
+                  ])
+              elif target_system == "spark":
+                  subprocess.call([
+                      "spark-submit", "--class", "DataProcessor", 
+                      "/opt/{{ platform_name }}/bin/spark/jobs/data_processor.jar", source_path
+                  ])
+              
+              # Quality checks securely
+              quality_result = subprocess.check_output([
+                  "python3", "/opt/{{ platform_name }}/utils/data_quality.py", 
+                  "--input", source_path, 
+                  "--rules", "/opt/{{ platform_name }}/rules/quality_rules.json"
+              ])
+              
+              return quality_result.decode()
+        dest: "/opt/{{ platform_name }}/utils/data_lake_processor.py"
+        owner: "digixuser"
+        group: "digixuser"
+        mode: '0750'
+
+    - name: Create secure comprehensive system maintenance and cleanup
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          # Cleanup temporary files and caches
+          find /opt/{{ platform_name }}/temp -type f -mtime +1 -delete
+          find /tmp -name "digix_*" -mtime +1 -delete
+          find /var/tmp -name "digix_*" -mtime +1 -delete
+          
+          # Cleanup old processing files
+          find /opt/{{ platform_name }}/uploads/processing -type f -mtime +7 -delete
+          find /opt/{{ platform_name }}/data/cache -type f -mtime +30 -delete
+          find /opt/{{ platform_name }}/models/training -type f -mtime +90 -delete
+          
+          # Database maintenance
+          export PGPASSWORD="{{ db_password }}"
+          psql "$DATABASE_URL" -c "VACUUM ANALYZE;"
+          psql "$DATABASE_URL" -c "REINDEX DATABASE digixplatform;"
+          
+          # Log rotation and cleanup
+          find /var/log/{{ platform_name }} -name "*.log.*" -mtime +30 -delete
+          find /var/log/{{ platform_name }} -name "*.gz" -mtime +90 -delete
+        dest: "/usr/local/bin/maintenance_system.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule comprehensive system maintenance
+      cron:
+        name: "System maintenance and cleanup"
+        minute: "0"
+        hour: "3"
+        job: "/usr/local/bin/maintenance_system.sh"
+
+    - name: Configure enterprise firewall rules
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Allow secure web connections
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Allow microservice communication ports
+      ufw:
+        rule: allow
+        port: "8001-8010"
+        proto: tcp
+
+    - name: Allow Spark cluster ports
+      ufw:
+        rule: allow
+        port: "7077"
+        proto: tcp
+
+    - name: Allow Flink streaming ports
+      ufw:
+        rule: allow
+        port: "8081"
+        proto: tcp
+
+    - name: Enable enterprise firewall securely
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Verify platform accessibility and functionality
+      uri:
+        url: "http://localhost/"
+        method: GET
+        status_code: 200
+        timeout: 30
+
+    - name: Check database connectivity for all services securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py check --database default"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Validate search service connection securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py search_index --status"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/digixplatform"
+      become_user: "digixuser"
+
+    - name: Verify AI model service operation securely
+      uri:
+        url: "http://localhost:8004/health/"
+        method: GET
+        status_code: 200
+
+    - name: Test data pipeline functionality securely
+      uri:
+        url: "http://localhost:8005/health/"
+        method: GET
+        status_code: 200
+
+    - name: Verify analytics engine operation securely
+      uri:
+        url: "http://localhost:8006/health/"
+        method: GET
+        status_code: 200
+
+    - name: Clean up temporary installation files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/nlp_model.tar.gz"
+        - "/tmp/vision_model.whl"
+        - "/tmp/install-ai-platform.sh"
+        - "/tmp/spark-cluster.tar.gz"
+        - "/tmp/flink-engine.tar.gz"
+        - "/tmp/enterprise-observability.tar.gz"
+
+    - name: Display secure enterprise deployment completion
+      debug:
+        msg: "Enterprise Digital Transformation Platform deployment completed successfully. Access at https://{{ domain_name }}"

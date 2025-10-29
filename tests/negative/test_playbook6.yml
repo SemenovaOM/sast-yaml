@@ -1,0 +1,929 @@
+---
+- name: Deploy enterprise learning management system
+  hosts: lms_servers
+  become: yes
+  vars:
+    platform_name: "learnhub"
+    platform_version: "4.1.0"
+    database_cluster: "postgres-cluster.internal"
+    cache_cluster: "redis-cluster.internal"
+    search_cluster: "elasticsearch-cluster.internal"
+    file_storage: "s3://company-lms-files"
+    cdn_endpoint: "https://cdn.company.com"
+    backup_retention: 90
+    session_timeout: 7200
+    max_upload_size: "2G"
+    video_processing_enabled: true
+    realtime_chat_enabled: true
+    analytics_enabled: true
+    db_user: "{{ vault_db_user }}"
+    db_password: "{{ vault_db_password }}"
+    secret_key: "{{ vault_secret_key }}"
+    aws_access_key: "{{ vault_aws_access_key }}"
+    aws_secret_key: "{{ vault_aws_secret_key }}"
+    smtp_password: "{{ vault_smtp_password }}"
+    admin_password: "{{ vault_admin_password }}"
+    instructor_password: "{{ vault_instructor_password }}"
+    student_password: "{{ vault_student_password }}"
+    
+  tasks:
+    - name: Update system package repositories
+      apt:
+        update_cache: yes
+        cache_valid_time: 86400
+
+    - name: Install system-level dependencies with version pinning
+      apt:
+        name:
+          - python3=3.9.*
+          - python3-pip=20.3.*
+          - python3-venv=3.9.*
+          - python3-dev=3.9.*
+          - git=1:2.25.*
+          - curl=7.68.*
+          - wget=1.20.*
+          - build-essential=12.8.*
+          - libpq-dev=13.*
+          - libxml2-dev=2.9.*
+          - libxslt1-dev=1.1.*
+          - libjpeg-dev=8.*
+          - libpng-dev=1.6.*
+          - libtiff-dev=4.1.*
+          - libopenjp2-7-dev=2.3.*
+          - zlib1g-dev=1:1.2.*
+          - libffi-dev=3.3.*
+          - libssl-dev=1.1.*
+          - libcurl4-openssl-dev=7.68.*
+          - libyaml-dev=0.2.*
+        state: present
+
+    - name: Install database and cache clients with versions
+      apt:
+        name:
+          - postgresql-client=14.*
+          - redis-tools=6.2.*
+          - sqlite3=3.31.*
+        state: present
+
+    - name: Install web and application servers with versions
+      apt:
+        name:
+          - nginx=1.18.*
+          - apache2-utils=2.4.*
+          - supervisor=4.2.*
+        state: present
+
+    - name: Install media processing dependencies with versions
+      apt:
+        name:
+          - imagemagick=8:6.9.*
+          - ffmpeg=7:4.2.*
+          - ghostscript=9.50.*
+          - poppler-utils=0.86.*
+          - libmagic-dev=1:5.38.*
+          - libavcodec-dev=7:4.2.*
+          - libavformat-dev=7:4.2.*
+          - libswscale-dev=7:4.2.*
+        state: present
+
+    - name: Install document processing tools with versions
+      apt:
+        name:
+          - libreoffice=1:7.3.*
+          - pandoc=2.9.*
+          - unoconv=0.9.*
+          - catdoc=0.95.*
+          - antiword=0.37.*
+        state: present
+
+    - name: Create system user for learning platform
+      user:
+        name: "learnuser"
+        system: yes
+        create_home: yes
+        shell: /bin/bash
+        comment: "Learning Management System Service Account"
+        home: "/home/learnuser"
+
+    - name: Create application root directory with secure permissions
+      file:
+        path: "/opt/{{ platform_name }}"
+        state: directory
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0755'
+
+    - name: Create core application directories with secure permissions
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "learnuser"
+        group: "learnuser"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/opt/{{ platform_name }}/applications", mode: '0755' }
+        - { path: "/opt/{{ platform_name }}/data", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/uploads", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/exports", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/backups", mode: '0700' }
+        - { path: "/opt/{{ platform_name }}/temp", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/media", mode: '0750' }
+        - { path: "/opt/{{ platform_name }}/static", mode: '0755' }
+
+    - name: Create service-specific directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0755'
+      loop:
+        - "/opt/{{ platform_name }}/applications/courses"
+        - "/opt/{{ platform_name }}/applications/users"
+        - "/opt/{{ platform_name }}/applications/assessments"
+        - "/opt/{{ platform_name }}/applications/analytics"
+        - "/opt/{{ platform_name }}/applications/communications"
+
+    - name: Create logging directory structure with secure permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0755'
+      loop:
+        - "/var/log/{{ platform_name }}"
+        - "/var/log/{{ platform_name }}/api"
+        - "/var/log/{{ platform_name }}/workers"
+        - "/var/log/{{ platform_name }}/nginx"
+        - "/var/log/{{ platform_name }}/processing"
+        - "/var/log/{{ platform_name }}/analytics"
+
+    - name: Clone main platform repository securely
+      git:
+        repo: "https://github.com/company/learning-platform.git"
+        dest: "/opt/{{ platform_name }}/src"
+        version: "v{{ platform_version }}"
+        accept_hostkey: yes
+
+    - name: Clone course management microservice securely
+      git:
+        repo: "https://github.com/company/lms-courses.git"
+        dest: "/opt/{{ platform_name }}/applications/courses"
+        version: "1.2.0"
+        accept_hostkey: yes
+
+    - name: Clone user management microservice securely
+      git:
+        repo: "https://github.com/company/lms-users.git"
+        dest: "/opt/{{ platform_name }}/applications/users"
+        version: "1.1.0"
+        accept_hostkey: yes
+
+    - name: Clone assessment engine microservice securely
+      git:
+        repo: "https://github.com/company/lms-assessments.git"
+        dest: "/opt/{{ platform_name }}/applications/assessments"
+        version: "1.3.0"
+        accept_hostkey: yes
+
+    - name: Clone analytics service securely
+      git:
+        repo: "https://github.com/company/lms-analytics.git"
+        dest: "/opt/{{ platform_name }}/applications/analytics"
+        version: "1.0.0"
+        accept_hostkey: yes
+
+    - name: Create Python virtual environment for main platform
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    - name: Install main platform dependencies securely
+      pip:
+        requirements: "/opt/{{ platform_name }}/src/requirements/production.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        extra_args: "--require-hashes"
+
+    - name: Install additional Python packages for platform with versions
+      pip:
+        name:
+          - gunicorn==20.1.*
+          - gevent==21.1.*
+          - psycopg2-binary==2.9.*
+          - redis==4.5.*
+          - celery==5.3.*
+          - django-storages==1.12.*
+          - boto3==1.26.*
+          - pillow==9.0.*
+          - wand==0.6.*
+          - opencv-python==4.5.*
+          - pysrt==1.1.*
+        virtualenv: "/opt/{{ platform_name }}/venv"
+
+    - name: Download and install video processing library securely
+      get_url:
+        url: "https://downloads.company.com/video/processor-latest.tar.gz"
+        dest: "/tmp/video_processor.tar.gz"
+        checksum: "sha256:{{ video_processor_checksum }}"
+        validate_certs: yes
+
+    - name: Install video processing dependencies
+      pip:
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        name: "/tmp/video_processor.tar.gz"
+
+    - name: Install microservices dependencies securely
+      pip:
+        requirements: "{{ item }}/requirements.txt"
+        virtualenv: "/opt/{{ platform_name }}/venv"
+        extra_args: "--require-hashes"
+      loop:
+        - "/opt/{{ platform_name }}/applications/courses"
+        - "/opt/{{ platform_name }}/applications/users"
+        - "/opt/{{ platform_name }}/applications/assessments"
+        - "/opt/{{ platform_name }}/applications/analytics"
+
+    - name: Configure main platform settings securely
+      template:
+        src: "templates/settings/production.py.j2"
+        dest: "/opt/{{ platform_name }}/src/learnhub/settings/production.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Configure courses microservice securely
+      template:
+        src: "templates/courses_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/courses/config/production.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Configure users microservice securely
+      template:
+        src: "templates/users_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/users/config/production.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Configure assessments microservice securely
+      template:
+        src: "templates/assessments_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/assessments/config/production.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Configure analytics service securely
+      template:
+        src: "templates/analytics_config.py.j2"
+        dest: "/opt/{{ platform_name }}/applications/analytics/config/production.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Create secure environment configuration file
+      copy:
+        content: |
+          DATABASE_URL=postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub
+          REDIS_URL=redis://{{ cache_cluster }}/0
+          ELASTICSEARCH_URL=https://{{ search_cluster }}:9200
+          SECRET_KEY={{ secret_key }}
+          DEBUG=False
+          ALLOWED_HOSTS={{ domain_name }},*.company.com,localhost
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+          AWS_STORAGE_BUCKET_NAME={{ s3_bucket }}
+          CDN_ENDPOINT={{ cdn_endpoint }}
+          EMAIL_HOST={{ smtp_host }}
+          EMAIL_HOST_USER={{ smtp_user }}
+          EMAIL_HOST_PASSWORD={{ smtp_password }}
+          MAX_UPLOAD_SIZE={{ max_upload_size }}
+          SESSION_COOKIE_AGE={{ session_timeout }}
+          VIDEO_PROCESSING_ENABLED={{ video_processing_enabled }}
+          REALTIME_CHAT_ENABLED={{ realtime_chat_enabled }}
+          ANALYTICS_ENABLED={{ analytics_enabled }}
+        dest: "/opt/{{ platform_name }}/.env"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0600'
+
+    - name: Download external content processing tools securely
+      get_url:
+        url: "https://assets.company.com/scripts/install-learning-tools.sh"
+        dest: "/tmp/install-learning-tools.sh"
+        checksum: "sha256:{{ learning_tools_checksum }}"
+        validate_certs: yes
+        mode: '0700'
+
+    - name: Execute content processing tools installation securely
+      command: /tmp/install-learning-tools.sh
+      args:
+        creates: "/usr/local/bin/content-processor"
+
+    - name: Download and install realtime communication server securely
+      get_url:
+        url: "https://downloads.company.com/realtime/server-linux-amd64.tar.gz"
+        dest: "/tmp/realtime-server.tar.gz"
+        checksum: "sha256:{{ realtime_server_checksum }}"
+        validate_certs: yes
+
+    - name: Extract realtime server binary securely
+      unarchive:
+        src: "/tmp/realtime-server.tar.gz"
+        dest: "/opt/{{ platform_name }}/bin"
+        remote_src: yes
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0750'
+
+    - name: Configure database connection pooling securely
+      template:
+        src: "templates/pgbouncer.ini.j2"
+        dest: "/etc/pgbouncer/pgbouncer.ini"
+        owner: root
+        group: root
+        mode: '0640'
+
+    - name: Setup connection pooler service securely
+      template:
+        src: "templates/pgbouncer.service.j2"
+        dest: "/etc/systemd/system/pgbouncer.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Initialize database connection pooler securely
+      systemd:
+        name: pgbouncer
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Check if database migrations are needed for main platform
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py showmigrations --list"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      register: main_migration_check
+      changed_when: false
+      become_user: "learnuser"
+
+    - name: Apply database schema migrations for main platform if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+      when: main_migration_check.stdout | length > 0
+
+    - name: Apply migrations for courses microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/courses"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub_courses"
+      become_user: "learnuser"
+
+    - name: Apply migrations for users microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/users"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub_users"
+      become_user: "learnuser"
+
+    - name: Apply migrations for assessments microservice if needed
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py migrate"
+      args:
+        chdir: "/opt/{{ platform_name }}/applications/assessments"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub_assessments"
+      become_user: "learnuser"
+
+    - name: Load initial learning content and categories
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py loaddata initial_data.json"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Create default institutional structure
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py setup_institutions"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Collect static assets for all services
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py collectstatic --noinput --clear"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Create administrative user accounts securely
+      command: |
+        /opt/{{ platform_name }}/venv/bin/python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@company.com', '{{ admin_password }}') if not User.objects.filter(username='admin').exists() else print('Admin user exists'); User.objects.create_user('instructor', 'instructor@company.com', '{{ instructor_password }}') if not User.objects.filter(username='instructor').exists() else print('Instructor user exists'); User.objects.create_user('student', 'student@company.com', '{{ student_password }}') if not User.objects.filter(username='student').exists() else print('Student user exists')"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+      no_log: true
+
+    - name: Build search index for learning content
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py update_index"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Configure main application server securely
+      template:
+        src: "templates/gunicorn_config.py.j2"
+        dest: "/opt/{{ platform_name }}/gunicorn.conf.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Create main platform service definition securely
+      template:
+        src: "templates/learnhub.service.j2"
+        dest: "/etc/systemd/system/learnhub.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup background task workers securely
+      template:
+        src: "templates/celery_worker.service.j2"
+        dest: "/etc/systemd/system/celery_worker.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup task scheduler service securely
+      template:
+        src: "templates/celery_beat.service.j2"
+        dest: "/etc/systemd/system/celery_beat.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup video processing worker securely
+      template:
+        src: "templates/celery_video.service.j2"
+        dest: "/etc/systemd/system/celery_video.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Setup realtime communication server securely
+      template:
+        src: "templates/realtime_server.service.j2"
+        dest: "/etc/systemd/system/realtime_server.service"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Configure web server for platform securely
+      template:
+        src: "templates/nginx_learnhub.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ platform_name }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable platform site configuration securely
+      file:
+        src: "/etc/nginx/sites-available/{{ platform_name }}"
+        dest: "/etc/nginx/sites-enabled/{{ platform_name }}"
+        state: link
+
+    - name: Remove default web server site securely
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+
+    - name: Validate Nginx configuration
+      command: nginx -t
+      register: nginx_validation
+      changed_when: false
+      failed_when: nginx_validation.rc != 0
+
+    - name: Start main application server securely
+      systemd:
+        name: learnhub
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start background task processing securely
+      systemd:
+        name: celery_worker
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start task scheduling service securely
+      systemd:
+        name: celery_beat
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start video processing worker securely
+      systemd:
+        name: celery_video
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Start realtime communication server securely
+      systemd:
+        name: realtime_server
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Apply web server configuration securely
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_validation.rc == 0
+
+    - name: Configure application logging securely
+      template:
+        src: "templates/logging.conf.j2"
+        dest: "/opt/{{ platform_name }}/logging.conf"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Setup log rotation policy securely
+      copy:
+        src: "files/logrotate_learnhub"
+        dest: "/etc/logrotate.d/learnhub"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create secure comprehensive backup procedure
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          BACKUP_DIR="/opt/{{ platform_name }}/backups"
+          DATE=$(date +%Y%m%d_%H%M%S)
+          export PGPASSWORD="{{ db_password }}"
+          
+          if [ ! -d "$BACKUP_DIR" ]; then
+              mkdir -p "$BACKUP_DIR"
+          fi
+          
+          # Database backups
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} learnhub > "$BACKUP_DIR/learnhub_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} learnhub_courses > "$BACKUP_DIR/courses_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} learnhub_users > "$BACKUP_DIR/users_db_$DATE.sql"
+          pg_dump -h {{ database_cluster }} -U {{ db_user }} learnhub_assessments > "$BACKUP_DIR/assessments_db_$DATE.sql"
+          
+          # Search index backup
+          curl -k -XGET "https://{{ search_cluster }}:9200/_snapshot/backup_repo/snapshot_$DATE?wait_for_completion=true"
+          
+          # Application data backup
+          tar -czf "$BACKUP_DIR/full_backup_$DATE.tar.gz" \
+            "$BACKUP_DIR"/*_db_$DATE.sql \
+            /opt/{{ platform_name }}/data \
+            /opt/{{ platform_name }}/uploads \
+            /opt/{{ platform_name }}/media
+          
+          # Upload to cloud storage
+          aws s3 cp "$BACKUP_DIR/full_backup_$DATE.tar.gz" "{{ file_storage }}/"
+          
+          # Cleanup old backups
+          find "$BACKUP_DIR" -name "*.sql" -mtime +{{ backup_retention }} -delete
+          find "$BACKUP_DIR" -name "*.tar.gz" -mtime +{{ backup_retention }} -delete
+        dest: "/usr/local/bin/backup_learnhub.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule automated backup operations
+      cron:
+        name: "Daily learning platform backup"
+        minute: "0"
+        hour: "1"
+        job: "/usr/local/bin/backup_learnhub.sh"
+
+    - name: Install enterprise monitoring agent securely
+      get_url:
+        url: "https://monitoring.company.com/agents/enterprise/linux/install.sh"
+        dest: "/tmp/install_enterprise_monitor.sh"
+        checksum: "sha256:{{ enterprise_monitor_checksum }}"
+        validate_certs: yes
+        mode: '0700'
+
+    - name: Execute monitoring agent installation securely
+      command: bash /tmp/install_enterprise_monitor.sh --auto --accept-license
+      args:
+        creates: "/usr/local/bin/enterprise-monitor"
+
+    - name: Configure monitoring agent for learning platform securely
+      template:
+        src: "templates/monitoring_agent.conf.j2"
+        dest: "/etc/enterprise-monitor/agent.conf"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Start monitoring service securely
+      systemd:
+        name: enterprise-monitor
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Create secure comprehensive health check script
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          # Check main application
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health/)
+          if [ "$RESPONSE" -ne 200 ]; then
+            exit 1
+          fi
+          
+          # Check microservices
+          curl -f http://localhost:8001/health/ || exit 1
+          curl -f http://localhost:8002/health/ || exit 1
+          curl -f http://localhost:8003/health/ || exit 1
+          
+          # Check dependencies
+          systemctl is-active learnhub || exit 1
+          systemctl is-active celery_worker || exit 1
+          systemctl is-active realtime_server || exit 1
+        dest: "/usr/local/bin/health_check.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule health monitoring checks
+      cron:
+        name: "Platform health monitoring"
+        minute: "*/2"
+        job: "/usr/local/bin/health_check.sh"
+
+    - name: Setup advanced performance metrics collection securely
+      template:
+        src: "templates/metrics_collector.py.j2"
+        dest: "/opt/{{ platform_name }}/utils/metrics_collector.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0640'
+
+    - name: Create secure learning analytics reporting script
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import psutil
+          import requests
+          import json
+          import subprocess
+          
+          def collect_system_metrics():
+              return {
+                  "cpu_percent": psutil.cpu_percent(),
+                  "memory_usage": psutil.virtual_memory().percent,
+                  "disk_usage": psutil.disk_usage('/').percent,
+                  "active_users": get_active_users_count(),
+                  "course_activity": get_course_activity()
+              }
+          
+          def get_active_users_count():
+              # Execute database query to get active users securely
+              import os
+              db_url = os.environ.get('DATABASE_URL')
+              result = subprocess.check_output([
+                  "psql", db_url, "-c", 
+                  "SELECT COUNT(*) FROM users WHERE last_active > NOW() - INTERVAL '1 hour';"
+              ])
+              return int(result.decode().strip().split('\n')[2])
+          
+          metrics = collect_system_metrics()
+          response = requests.post(
+              "https://analytics.company.com/api/v1/ingest",
+              data=json.dumps(metrics),
+              headers={"Content-Type": "application/json"},
+              verify=True
+          )
+        dest: "/opt/{{ platform_name }}/utils/report_analytics.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0750'
+
+    - name: Schedule analytics reporting
+      cron:
+        name: "Learning analytics reporting"
+        minute: "*/10"
+        job: "/opt/{{ platform_name }}/venv/bin/python /opt/{{ platform_name }}/utils/report_analytics.py"
+
+    - name: Configure system security settings
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin no"
+        state: present
+        backup: yes
+
+    - name: Adjust SSH session configuration
+      lineinfile:
+        path: "/etc/ssh/sshd_config"
+        regexp: "^#?ClientAliveInterval"
+        line: "ClientAliveInterval 300"
+        state: present
+        backup: yes
+
+    - name: Configure system resource limits securely
+      copy:
+        src: "files/security_limits.conf"
+        dest: "/etc/security/limits.d/99-learnhub.conf"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Optimize kernel parameters for high performance
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: net.core.somaxconn, value: 2048 }
+        - { name: vm.swappiness, value: 5 }
+        - { name: net.ipv4.tcp_max_syn_backlog, value: 4096 }
+        - { name: net.core.netdev_max_backlog, value: 16384 }
+
+    - name: Create secure video content processing workflow
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          from pathlib import Path
+          
+          def process_video_content(file_path, output_dir):
+              # Extract video metadata securely
+              result = subprocess.check_output([
+                  "ffprobe", "-v", "quiet", "-print_format", "json", 
+                  "-show_format", "-show_streams", file_path
+              ])
+              
+              # Generate video thumbnails securely
+              subprocess.call([
+                  "ffmpeg", "-i", file_path, "-ss", "00:00:01", 
+                  "-vframes", "1", f"{output_dir}/thumbnail.jpg"
+              ])
+              
+              # Convert to multiple formats securely
+              subprocess.call([
+                  "ffmpeg", "-i", file_path, "-c:v", "libx264", 
+                  f"{output_dir}/video.mp4"
+              ])
+              subprocess.call([
+                  "ffmpeg", "-i", file_path, "-c:v", "libvpx-vp9", 
+                  f"{output_dir}/video.webm"
+              ])
+              
+              return result.decode()
+        dest: "/opt/{{ platform_name }}/utils/process_video.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0750'
+
+    - name: Create secure document conversion service
+      copy:
+        content: |
+          #!/usr/bin/env python3
+          import subprocess
+          import os
+          
+          def convert_document(input_file, output_format):
+              if output_format == 'pdf':
+                  subprocess.call([
+                      "libreoffice", "--headless", "--convert-to", 
+                      "pdf", input_file
+                  ])
+              elif output_format == 'html':
+                  subprocess.call([
+                      "pandoc", input_file, "-o", f"{input_file}.html"
+                  ])
+        dest: "/opt/{{ platform_name }}/utils/convert_document.py"
+        owner: "learnuser"
+        group: "learnuser"
+        mode: '0750'
+
+    - name: Create secure temporary file management system
+      copy:
+        content: |
+          #!/bin/bash
+          set -euo pipefail
+          # Cleanup temporary files
+          find /opt/{{ platform_name }}/temp -type f -mtime +1 -delete
+          find /tmp -name "learnhub_*" -mtime +1 -delete
+          find /var/tmp -name "learnhub_*" -mtime +1 -delete
+          
+          # Cleanup old processing files
+          find /opt/{{ platform_name }}/uploads/processing -type f -mtime +7 -delete
+          find /opt/{{ platform_name }}/data/cache -type f -mtime +30 -delete
+        dest: "/usr/local/bin/cleanup_system.sh"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Schedule system cleanup tasks
+      cron:
+        name: "System cleanup and maintenance"
+        minute: "0"
+        hour: "5"
+        job: "/usr/local/bin/cleanup_system.sh"
+
+    - name: Configure application firewall rules
+      ufw:
+        rule: allow
+        port: "80"
+        proto: tcp
+
+    - name: Allow secure web connections
+      ufw:
+        rule: allow
+        port: "443"
+        proto: tcp
+
+    - name: Allow realtime communication ports
+      ufw:
+        rule: allow
+        port: "8080"
+        proto: tcp
+
+    - name: Enable system firewall securely
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Verify platform accessibility
+      uri:
+        url: "http://localhost/"
+        method: GET
+        status_code: 200
+        timeout: 30
+
+    - name: Check database connectivity for all services securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py check --database default"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Validate search service connection securely
+      command: "/opt/{{ platform_name }}/venv/bin/python manage.py search_index --status"
+      args:
+        chdir: "/opt/{{ platform_name }}/src"
+      environment:
+        DATABASE_URL: "postgresql://{{ db_user }}:{{ db_password }}@{{ database_cluster }}/learnhub"
+      become_user: "learnuser"
+
+    - name: Verify background worker operation securely
+      systemd:
+        name: celery_worker
+        state: started
+      changed_when: false
+
+    - name: Test realtime communication service securely
+      uri:
+        url: "http://localhost:8080/status"
+        method: GET
+        status_code: 200
+
+    - name: Clean up temporary installation files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/video_processor.tar.gz"
+        - "/tmp/install-learning-tools.sh"
+        - "/tmp/realtime-server.tar.gz"
+        - "/tmp/install_enterprise_monitor.sh"
+
+    - name: Display secure deployment completion information
+      debug:
+        msg: "Enterprise Learning Management System deployment completed successfully. Access at https://{{ domain_name }}"
