@@ -24,9 +24,12 @@ class ANS006(Rule):
                     continue
                 
                 if self._is_file_creation_module(task):
-                    if self._missing_permissions(task):
+                    permission_issues = self._check_permission_issues(task)
+                    if permission_issues:
                         task_phrase = f"'{task.name.strip()}'" if task.name and task.name.strip() else ""
                         play_phrase = f" в плейбуке '{play.name.strip()}'" if play.name and play.name.strip() else ""
+                        
+                        issues_str = ", ".join(permission_issues)
                         
                         violations.append({
                             'rule_id': self.id,
@@ -35,13 +38,16 @@ class ANS006(Rule):
                             'play': play.name or None,
                             'task': task.name or None,
                             'message': (
-                                f"Задача {task_phrase}{play_phrase} создает файлы без указания owner, group или mode. "
-                                f"Рекомендуется явно задавать права доступа."
+                                f"Задача {task_phrase}{play_phrase} содержит проблемы с правами доступа: {issues_str}. "
+                                f"Рекомендуется явно задавать безопасные права доступа."
                             )
                         })
         return violations
     
     def _is_file_creation_module(self, task) -> bool:
+        if not hasattr(task, 'module') or not task.module:
+            return False
+            
         file_creation_modules = [
             'copy', 'template', 'file',
             'ansible.builtin.copy', 'ansible.builtin.template', 'ansible.builtin.file'
@@ -56,46 +62,82 @@ class ANS006(Rule):
         
         return task.module in file_creation_modules
     
-    def _missing_permissions(self, task) -> bool:
+    def _check_permission_issues(self, task) -> List[str]:
+        issues = []
+        
         if not hasattr(task, 'parameters') or not task.parameters:
-            return False
+            return issues
             
         params = task.parameters
         if not isinstance(params, dict):
-            return False
+            return issues
         
         dest = params.get('dest', '') or params.get('path', '')
-        if self._is_temporary_path(str(dest)):
+        owner = params.get('owner')
+        group = params.get('group')
+        mode = params.get('mode')
+        
+        if mode and self._is_dangerous_mode(mode):
+            issues.append(f"установлен опасный режим доступа {mode}")
+            
+        if self._should_check_missing_permissions(task, str(dest)):
+            if owner is None and group is None and mode is None:
+                issues.append("отсутствуют права доступа (owner, group, mode)")
+        
+        return issues
+
+    def _should_check_missing_permissions(self, task, dest: str) -> bool:
+        if not hasattr(task, 'parameters') or not task.parameters:
+            return True
+            
+        params = task.parameters
+        if not isinstance(params, dict):
+            return True
+
+        if self._is_temporary_path(dest):
+            return False
+            
+        if hasattr(task, 'module') and task.module in ['template', 'ansible.builtin.template']:
+            return False
+            
+        if hasattr(task, 'module') and task.module in ['file', 'ansible.builtin.file']:
+            if params.get('state') == 'directory':
+                if self._is_standard_directory_path(dest):
+                    return False
+        
+        if self._is_system_config(dest):
             return False
             
         if params.get('remote_src') and not params.get('force', True):
             return False
             
-        owner = params.get('owner')
-        group = params.get('group')
-        mode = params.get('mode')
-        
-        if owner is None and group is None and mode is None:
-            return True
+        return True
+
+    def _is_standard_directory_path(self, path: str) -> bool:
+
+        if not path:
+            return False
             
-        if mode and self._is_dangerous_mode(mode):
-            return True
-
-        if task.module in ['template', 'ansible.builtin.template']:
-            return False
+        path_lower = path.lower()
+        standard_dirs = [
+            '/opt/', '/var/log/', '/home/', '/var/lib/',
+            '/usr/local/', '/etc/', '/tmp/', '/var/tmp/'
+        ]
         
-        dest = params.get('dest', '') or params.get('path', '')
-        if self._is_system_config(dest):
-            return False
-        
-        return owner is None and group is None and mode is None
-
+        return any(std_dir in path_lower for std_dir in standard_dirs)
+    
     def _is_system_config(self, path: str) -> bool:
+        if not path:
+            return False
+            
+        path_lower = path.lower()
         system_configs = [
             '/etc/', '/usr/lib/', '/lib/', '/opt/',
-            'service', 'config', 'conf', 'ini', 'yml', 'yaml'
+            '.service', '.conf', '.ini', '.yml', '.yaml', 
+            '.json', '.xml', '.properties', '.cfg'
         ]
-        return any(config in str(path).lower() for config in system_configs)
+        
+        return any(config in path_lower for config in system_configs)
     
     def _is_temporary_path(self, path: str) -> bool:
         if not path:
@@ -104,8 +146,7 @@ class ANS006(Rule):
         path_lower = path.lower()
         temporary_indicators = [
             '/tmp/', '/var/tmp/', '/dev/shm/', 
-            '/tmp\\', '/var/tmp\\',
-            'temp', 'tmp', 'cache'
+            'temp', 'tmp', 'cache', 'scratch'
         ]
         
         for indicator in temporary_indicators:
